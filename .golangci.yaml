@@ -1,0 +1,33 @@
+version: "2"
+
+run:
+  timeout: 3m
+
+linters:
+  enable:
+    - govet
+    - staticcheck
+    - revive
+    - errcheck
+    - ineffassign
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+    - gci
+
+linters-settings:
+  revive:
+    severity: warning
+    rules:
+      - name: exported
+        severity: warning
+      - name: unused-parameter
+        disabled: true
+
+gci:
+  sections:
+    - standard
+    - default
+    - localmodule

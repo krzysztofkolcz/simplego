@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simplego
+  labels:
+    app: simplego
+    tier: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: simplego
+      tier: frontend
+  template:
+    metadata:
+      labels:
+        app: simplego
+        tier: frontend
+    spec: # Pod spec
+      containers:
+        - name: simplego
+          image: registry.gitlab.com/voting-application/simplego
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5000
+              name: simplego
