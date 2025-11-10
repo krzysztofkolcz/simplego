@@ -1,0 +1,1 @@
+Shift + Ctrl + C - copy visible

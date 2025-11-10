@@ -8,11 +8,18 @@ Lub przejście tam i z powrotem pomiędzy edytorem a drzewem plików:
 Ctrl + Shift + e
 
 
-Dodanie do 'keyboard shortcuts':
-  {
-    "key": "a",
-    "command": "explorer.newFile",
-    "when": "explorerViewletVisible && filesExplorerFocus && !explorerResourceReadOnly"
-  }
 
-Jeżeli znajduje się w explorerze, 'a' dodaje nowy plik.
+
+### Nowy folder, nowy plik
+Jestem w explorerze (Ctrl + Shift + e)
+
+{
+  "key": "alt+n",
+  "command": "explorer.newFile",
+  "when": "explorerViewletVisible && filesExplorerFocus && !explorerResourceReadOnly"
+},
+{
+  "key": "alt+shift+n",
+  "command": "explorer.newFolder",
+  "when": "explorerViewletVisible && filesExplorerFocus && !explorerResourceReadOnly"
+}
