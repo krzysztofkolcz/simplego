@@ -1,11 +1,5 @@
 a jak zaznaczyć multikursorem te same wyrazy, które chce zmienić?
 
-Świetne pytanie 👏 — to **jeden z najważniejszych trików w VS Code**, kiedy robisz refaktory jak Twój (np. zmieniasz `m` → `result.A`, `n` → `result.B` itd.).
-
-Oto wszystkie **sposoby na multi-cursor dla identycznych wyrazów** — od najprostszych po najbardziej precyzyjne 👇
-
----
-
 ## 🎯 1️⃣ **Zaznacz kolejne wystąpienie wyrazu**
 
 👉 **Skrót:**
@@ -42,9 +36,10 @@ Jeśli przesadziłeś (zaznaczyłeś za dużo), użyj `Ctrl + U` (Undo last sele
 
 👉 **Skróty:**
 
-* `Alt + Click` → dodaje kursor w dowolnym miejscu
-* `Alt + Shift + ↑ / ↓` → dodaje kursor w kolejnych liniach pionowo (tryb kolumnowy)
+* `Alt + Click` → dodaje kursor w dowolnym miejscu (mogę dodać nawet w tej samej linini)
+
 TODO -alt (option) + shift + strzalka -  nie dziala. Powiela linie.
+* `Alt + Shift + ↑ / ↓` → dodaje kursor w kolejnych liniach pionowo (tryb kolumnowy)
 
 ### 🔹 Użycie:
 

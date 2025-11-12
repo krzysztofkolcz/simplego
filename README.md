@@ -12,6 +12,16 @@ GORM
 Go routines
 Grpc
 
+## 4 Go books
+https://www.youtube.com/shorts/YNuhuo4QpJw
+Learning Go - O'Reilly - https://www.oreilly.com/library/view/learning-go-2nd/9781098139285/
+gRPC Microservices in Go - https://www.oreilly.com/library/view/grpc-microservices-in/9781633439207/
+(Microservices patterns - concepts)
+
+Domain Driven Design with Golang - https://www.packtpub.com/en-us/product/domain-driven-design-with-golang-9781804619261?srsltid=AfmBOoqJV4TTT7ndtjIa4wubImBmnHUN4kkfqfQOFZQB2h0exhxcY08W
+
+Concurrency in Go O'Reilly -  https://www.oreilly.com/library/view/concurrency-in-go/9781491941294/
+
 ## Libraries
 slogctx
 
