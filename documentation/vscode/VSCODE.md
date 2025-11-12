@@ -22,3 +22,28 @@ Powrót do panelu wyszukiwania (z edytora)	                Ctrl + Shift + F (pon
 
 Również strzałki poruszają się po wynikach, jeżeli jestem na liśce wyników.
 Tab przechodzi po kolejnych opcjach interfejsu (np. zmiana wyszukiwania na regex.)
+
+# Błędy
+Panel 'Problems'
+Windows/Linux: Ctrl + Shift + m
+macOS: Cmd + Shift + m
+
+błędy (Error),
+ostrzeżenia (Warning).
+
+F8 – następny błąd
+Shift + F8 – poprzedni błąd
+
+# Run and Debug
+Wygląda na to, ze VS Code nie ma domyslnie Run | Debug dla funkcji main() w main.go.
+Moge dodawac konfiguracje w panelu 'Run and Debug' (kolko zebate - launch.json)
+Cmd + Shift + D
+Ctrl + Shift + D
+
+Zainstalowalem plugin Code Runner.
+
+Plugin golang.go powinien teoretycznie udostepniac 'Run | Debug', ale robi to tylko dla testow
+
+Cmd + Shift + p
+Ctrl + Shift + p
+Go: Install/Update tools
