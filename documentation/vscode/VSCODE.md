@@ -47,3 +47,11 @@ Plugin golang.go powinien teoretycznie udostepniac 'Run | Debug', ale robi to ty
 Cmd + Shift + p
 Ctrl + Shift + p
 Go: Install/Update tools
+
+# Porównanie plików
+1. Użycie menu kontekstowego w Explorerze
+
+Otwórz Explorer (Ctrl+Shift+E lub ikona plików po lewej).
+Kliknij prawym przyciskiem na pierwszy plik, wybierz Select for Compare.
+Kliknij prawym przyciskiem na drugi plik, wybierz Compare with Selected.
+VS Code otworzy widok porównania w dwóch kolumnach z podświetleniem różnic.
