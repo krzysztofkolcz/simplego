@@ -1,0 +1,1 @@
+https://livebook.manning.com/book/100-go-mistakes-and-how-to-avoid-them/chapter-2#315

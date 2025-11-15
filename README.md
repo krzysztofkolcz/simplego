@@ -23,7 +23,10 @@ Domain Driven Design with Golang - https://www.packtpub.com/en-us/product/domain
 Concurrency in Go O'Reilly -  https://www.oreilly.com/library/view/concurrency-in-go/9781491941294/
 
 
+## List of books on github
 https://github.com/dariubs/GoBooks?tab=readme-ov-file#2025---pro-go-patterns-advanced-function-design-concurrency-models-and-clean-code
+
+https://github.com/irezaul/go-life
 
 ## Libraries
 slogctx
