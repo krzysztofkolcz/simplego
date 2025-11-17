@@ -34,6 +34,9 @@ ostrzeżenia (Warning).
 F8 – następny błąd
 Shift + F8 – poprzedni błąd
 
+Ctrl + J - ukrywa dolny panel.
+Ctrl + B - ukrywa boczny panel.
+
 # Run and Debug
 Wygląda na to, ze VS Code nie ma domyslnie Run | Debug dla funkcji main() w main.go.
 Moge dodawac konfiguracje w panelu 'Run and Debug' (kolko zebate - launch.json)
@@ -55,3 +58,71 @@ Otwórz Explorer (Ctrl+Shift+E lub ikona plików po lewej).
 Kliknij prawym przyciskiem na pierwszy plik, wybierz Select for Compare.
 Kliknij prawym przyciskiem na drugi plik, wybierz Compare with Selected.
 VS Code otworzy widok porównania w dwóch kolumnach z podświetleniem różnic.
+
+# Snippet
+Jak dodać snippet w VS Code?
+## Otwórz edytor snippetów
+
+Wciśnij:
+
+Ctrl + Shift + P → wpisz “Snippets: Configure Snippets” → Enter
+→ wybierz go.json (snippet dla Golanga)
+
+To otworzy plik:
+
+%APPDATA%/Code/User/snippets/go.json   (Windows)
+~/.config/Code/User/snippets/go.json   (Linux)
+~/Library/Application Support/...       (Mac)
+
+## Dodaj własny snippet
+
+Przykład — snippet dla metody z receiverem:
+```
+{
+    "Go receiver method": {
+        "prefix": "gorec",
+        "body": [
+            "func (${1:r} *${2:Type}) ${3:MethodName}(${4:params}) ${5:returnType} {",
+            "    ${6:// TODO: implement}",
+            "}"
+        ],
+        "description": "Create a Go method with receiver"
+    }
+}
+```
+Co robi ten snippet?
+
+Wpisujesz:
+
+gorec + TAB
+
+
+I dostajesz gotowy szablon, np.:
+
+func (s *Service) DoSomething(ctx context.Context) error {
+    // TODO: implement
+}
+
+Pola $1, $2, $3 … są wypełniane kolejno:
+
+$1 – nazwa receivera (np. s)
+$2 – typ receivera (Service)
+$3 – nazwa metody (DoSomething)
+$4 – parametry (ctx context.Context)
+$5 – typ zwracany (error)
+$6 – treść metody
+
+VS Code pozwala przeskakiwać między nimi Tabem.
+
+## Dodaj więcej snippetów (przykład: metoda bez zwracania)
+{
+    "Go void method": {
+        "prefix": "govoid",
+        "body": [
+            "func (${1:r} *${2:Type}) ${3:MethodName}(${4:params}) {",
+            "    ${5:// TODO: implement}",
+            "}"
+        ],
+        "description": "Go method with receiver and no return"
+    }
+}
