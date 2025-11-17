@@ -59,6 +59,30 @@ Kliknij prawym przyciskiem na pierwszy plik, wybierz Select for Compare.
 Kliknij prawym przyciskiem na drugi plik, wybierz Compare with Selected.
 VS Code otworzy widok porównania w dwóch kolumnach z podświetleniem różnic.
 
+# todo - 25 VS Code Productivity Tips and Speed Hacks
+https://www.youtube.com/watch?v=ifTF3ags0XI
+
+
+# Nawigacja po elementach pliku
+Wyszukiwanie:
+Mac: command + f
+Windows/linux:
+
+
+Przechodzenie po elementach pliku z linii komend:
+Mac: command + shift + p, @  (najpierw chyba usunąć >)
+Windows/linux:
+
+Przechodzenie po elementach w całym projekcie z linii komend:
+Mac: command + shift + p, #  (najpierw chyba usunąć >)
+Windows/linux:
+
+Przechodzenie po elementach pliku:
+Mac: command + shift + .
+Windows/linux: 
+
+
+
 # Snippet
 Jak dodać snippet w VS Code?
 ## Otwórz edytor snippetów

@@ -27,3 +27,8 @@ Jestem w explorerze (Ctrl + Shift + e)
 
 # TODO - reveal file in explorer
 Na Macu nie działa zaden skrot klawiszowy, ktory pozwalalby podswietlic aktualny plik w explorezre. Sprawdzic na linux/windows
+
+https://stackoverflow.com/questions/44844005/how-to-reveal-current-file-in-explorer
+Ctrl + K, R 
+
+

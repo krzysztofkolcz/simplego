@@ -46,6 +46,8 @@ Helm:
 # Postgresql
 
 kubectl port-forward svc/cmk-postgresql 5432:5432 -n cmk
+kubectl port-forward -n cmk cmk-postgresql-0 5432:5432
+
 
 ## Tymaczasowy klient psql na podzie (nie zadziałał)
 kubectl run psql-client --rm -it --image=postgres:16 -n cmk -- bash
@@ -69,3 +71,6 @@ k3d cluster delete cmkcluster
 
 # Rabbit
 kubectl port-forward -n cmk pod/rabbitmq-0 15672:15672
+
+# Svc
+kubectl get svc -n cmk
