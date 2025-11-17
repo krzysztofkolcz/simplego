@@ -23,3 +23,7 @@ Jestem w explorerze (Ctrl + Shift + e)
   "command": "explorer.newFolder",
   "when": "explorerViewletVisible && filesExplorerFocus && !explorerResourceReadOnly"
 }
+
+
+# TODO - reveal file in explorer
+Na Macu nie działa zaden skrot klawiszowy, ktory pozwalalby podswietlic aktualny plik w explorezre. Sprawdzic na linux/windows
