@@ -28,3 +28,9 @@ Jeśli chcesz zsynchronizować Vima z systemowym schowkiem na stałe:
 
 
 Dzięki temu wszystko, co kopiujesz w Vimie (yy, p itd.), trafia też do systemowego schowka i można podejrzeć przez Ctrl+V lub :reg +.
+
+
+# Wyłączenie przechwytywania Ctrl przez plugin vim
+Settings: 
+MAC : Command + ,
+vim: use ctrl keys - wyłączyć
