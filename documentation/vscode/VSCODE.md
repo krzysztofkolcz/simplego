@@ -160,3 +160,7 @@ VS Code pozwala przeskakiwać między nimi Tabem.
         "description": "Go method with receiver and no return"
     }
 }
+
+
+# Przejście do panelu Git
+ctrl + shift + G, G
