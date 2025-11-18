@@ -8,3 +8,6 @@ https://chatgpt.com/c/6914dd01-c52c-8322-8991-5f408e7a4a48
 
 Golang functional option pattern + "github.com/google/go-cmp/cmp"
 https://chatgpt.com/c/691ad910-42b4-8331-ae6e-77843a746b8f
+
+Closure
+https://chatgpt.com/c/691a4320-c44c-8329-b40b-472227e37b17

@@ -81,7 +81,17 @@ Przechodzenie po elementach pliku:
 Mac: command + shift + .
 Windows/linux: 
 
+Przejście do linii nr.:
+Mac: control + g
 
+Przenoszenie linii:
+Mac: option + up arrow/down arrow
+Windows/linux: alt + up arrow/down arrow
+
+
+Kopiowanie linii:
+Mac: option + shift + up arrow/down arrow
+Windows/linux: alt + shift + up arrow/down arrow
 
 # Snippet
 Jak dodać snippet w VS Code?
