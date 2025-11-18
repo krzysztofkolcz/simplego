@@ -4,7 +4,8 @@ wpisuje np.:
 tenant := model.Tenant{}
 ```
 Kursor ustawiam pomiędzy {}
-Ctrl + .  -> wybieram z menu 'Fill Struct' (niby plugin gopls)
+Windos/Linux: Ctrl + .  -> wybieram z menu 'Fill Struct' (niby plugin gopls)
+Mac: command + .
 
 # Wyszukiwanie Ctrl + Shift + f
 
