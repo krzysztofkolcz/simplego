@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "go-hello.fullname" . }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 8080
+  selector:
+    app.kubernetes.io/name: {{ include "go-hello.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
