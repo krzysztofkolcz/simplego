@@ -163,5 +163,14 @@ VS Code pozwala przeskakiwać między nimi Tabem.
 }
 
 
-# Przejście do panelu Git
+# GIT
+## Przejście do panelu Git
 ctrl + shift + G, G
+
+## Moje proponowane skroty klawiszowe dla git
+Ctrl + g, s -> git stash
+Ctrl + g, b -> git checkout to...
+Ctrl + g, a -> git stage all changes
+Ctrl + g, c -> checkout branch // NIE dziala
+Ctrl + g, p -> git pull
+Ctrl + g, d -> git branch -d

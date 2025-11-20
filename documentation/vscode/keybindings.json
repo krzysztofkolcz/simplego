@@ -1,0 +1,49 @@
+[
+    {
+        "key": "alt+v",
+        "command": "toggleVim",
+        "when": "editorTextFocus"
+    },
+    {
+        "key": "alt+n",
+        "command": "explorer.newFile",
+        "when": "explorerViewletVisible && filesExplorerFocus && !explorerResourceReadOnly"
+    },
+    {
+        "key": "alt+shift+n",
+        "command": "explorer.newFolder",
+        "when": "explorerViewletVisible && filesExplorerFocus && !explorerResourceReadOnly"
+    },
+    {
+        "key": "shift+alt+l",
+        "command": "workbench.files.action.showActiveFileInExplorer"
+    },
+    {
+        "key": "ctrl+g s",
+        "command": "git.stash",
+        "when": "!operationInProgress"
+    },
+    {
+        "key": "ctrl+g c",
+        "command": "git.graph.checkout"
+    },
+    {
+        "key": "ctrl+g b",
+        "command": "git.checkout"
+    },
+    {
+        "key": "ctrl+g a",
+        "command": "git.stageAll",
+        "when": "!operationInProgress"
+    },
+    {
+        "key": "ctrl+g p",
+        "command": "git.pull",
+        "when": "!operationInProgress"
+    },
+    {
+        "key": "ctrl+g d",
+        "command": "git.deleteBranch",
+        "when": "!operationInProgress"
+    }
+]
