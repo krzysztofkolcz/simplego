@@ -186,6 +186,9 @@ Ctrl + 1
 Lub przejście tam i z powrotem pomiędzy edytorem a drzewem plików:
 Ctrl + Shift + e
 
+Ctrl + Tab - nawigacja po otwartych plikach
+Alt + ~ - nawigacja po otwartych folderach projektowych
+
 
 
 
