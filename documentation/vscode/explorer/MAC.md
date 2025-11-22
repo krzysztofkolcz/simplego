@@ -1,1 +1,0 @@
-Shift + option + F - formatowanie dokumentu

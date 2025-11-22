@@ -174,3 +174,45 @@ Ctrl + g, a -> git stage all changes
 Ctrl + g, c -> checkout branch // NIE dziala
 Ctrl + g, p -> git pull
 Ctrl + g, d -> git branch -d
+
+
+# Explorer navigation
+Przejście do explorera:
+Ctrl + 0
+
+Przejście do edytora
+Ctrl + 1
+
+Lub przejście tam i z powrotem pomiędzy edytorem a drzewem plików:
+Ctrl + Shift + e
+
+
+
+
+### Nowy folder, nowy plik
+Jestem w explorerze (Ctrl + Shift + e)
+
+{
+  "key": "alt+n",
+  "command": "explorer.newFile",
+  "when": "explorerViewletVisible && filesExplorerFocus && !explorerResourceReadOnly"
+},
+{
+  "key": "alt+shift+n",
+  "command": "explorer.newFolder",
+  "when": "explorerViewletVisible && filesExplorerFocus && !explorerResourceReadOnly"
+}
+
+
+# Reveal active file in explorer
+Lokalizacja aktywnego pliku w explorerze
+
+Linux: Shift + Alt + L (System)
+Mac:  Shift + Option + L (User - dodałem sam)
+
+
+Ctrl + K, R 
+
+
+# Formatowanie dokumentu
+Mac: Shift + Option + F - formatowanie dokumentu
