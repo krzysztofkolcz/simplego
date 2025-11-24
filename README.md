@@ -1,4 +1,5 @@
-
+# Organization
+DZIENNIK.md - dziennik aktywności
 
 # Go topics
 https://www.youtube.com/watch?v=wr8gJMj3ODw
