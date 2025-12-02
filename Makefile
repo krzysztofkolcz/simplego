@@ -5,7 +5,7 @@ IMAGE_NAME := $(SIMPLEGO_APP_NAME)-$(SIMPLEGO_DEV_TARGET):$(TAG)
 DOCKERFILE_DIR := .
 DOCKERFILE_NAME := Dockerfile
 CONTEXT_DIR := .
-CMK_HELM_CHART := /Users/C5383717/GolandProjects/helm-tutorial/simpleGo-helm
+SIMPLEGO_HELM_CHART := /Users/C5383717/GolandProjects/helm-tutorial/simpleGo-helm
 
 # Target to build Docker image
 docker-dev-build:
@@ -35,7 +35,7 @@ install-k3d:
 start-k3d-colima: install-k3d delete-cluster
 	@echo "Starting k3d."
 	@if ! k3d cluster list | grep -q '$(CLUSTER_NAME)'; then \
-	   K3D_FIX_DNS=0 k3d cluster create $(CLUSTER_NAME) -p "30084:30083@server:0" --api-port 127.0.0.1:6443; \
+	   K3D_FIX_DNS=0 k3d cluster create $(CLUSTER_NAME) -p "30084:30083@server:0" --api-port 127.0.0.1:6444; \
 	   k3d kubeconfig merge $(CLUSTER_NAME) --kubeconfig-switch-context; \
 	fi
 
@@ -43,7 +43,7 @@ start-k3d-colima: install-k3d delete-cluster
 start-k3d: install-k3d delete-cluster
 	@echo "Starting k3d."
 	@if ! k3d cluster list | grep -q '$(CLUSTER_NAME)'; then \
-	   k3d cluster create $(CLUSTER_NAME) -p "30084:30083@server:0" --api-port 127.0.0.1:6443; \
+	   k3d cluster create $(CLUSTER_NAME) -p "30084:30083@server:0" --api-port 127.0.0.1:6444; \
 	   k3d kubeconfig merge $(CLUSTER_NAME) --kubeconfig-switch-context; \
 	fi
 
@@ -63,15 +63,15 @@ k3d-apply-helm-chart:
 
 k3d-apply-simplego-helm-chart: clean-k3d start-k3d k3d-build-simplego-image
 	@echo "Applying CMK Helm chart."
-	$(MAKE) k3d-apply-helm-chart CHART_NAME=simplego CHART_DIR=$(CMK_HELM_CHART) APPLY_NAMESPACE=$(NAMESPACE)
+	$(MAKE) k3d-apply-helm-chart CHART_NAME=simplego CHART_DIR=$(SIMPLEGO_HELM_CHART) APPLY_NAMESPACE=$(NAMESPACE)
 
 k3d-apply-simplego-helm-chart-colima: clean-k3d start-k3d-colima k3d-build-simplego-image
 	@echo "Applying CMK Helm chart."
-	$(MAKE) k3d-apply-helm-chart CHART_NAME=simplego CHART_DIR=$(CMK_HELM_CHART) APPLY_NAMESPACE=$(NAMESPACE)
+	$(MAKE) k3d-apply-helm-chart CHART_NAME=simplego CHART_DIR=$(SIMPLEGO_HELM_CHART) APPLY_NAMESPACE=$(NAMESPACE)
 
 k3d-upgrade-simplego-helm-chart:
 	@echo "Applying CMK Helm chart."
-	$(MAKE) k3d-apply-helm-chart CHART_NAME=simplego CHART_DIR=$(CMK_HELM_CHART) APPLY_NAMESPACE=$(NAMESPACE)
+	$(MAKE) k3d-apply-helm-chart CHART_NAME=simplego CHART_DIR=$(SIMPLEGO_HELM_CHART) APPLY_NAMESPACE=$(NAMESPACE)
 
 # Target to clean everything in the namespace
 clean-k3d:
@@ -90,24 +90,6 @@ delete-cluster:
 	else \
 	   echo "k3d cluster '$(CLUSTER_NAME)' does not exist."; \
 	fi
-
-add-postgresql-to-cluster:
-	helm repo add bitnami https://charts.bitnami.com/bitnami
-	helm repo update
-	helm upgrade --install simplego-postgresql bitnami/postgresql --namespace $(NAMESPACE)
-
-add-postgresql-to-cluster-2:
-	helm upgrade --install simplego-postgresql bitnami/postgresql \
-	  --set global.postgresql.auth.username=cmkuser \
-	  --set global.postgresql.auth.password=cmkpass \
-	  --set global.postgresql.auth.database=cmkdb \
-	  --namespace $(NAMESPACE)
-
-psql-secret:
-	kubectl create secret generic simplego-postgresql --from-literal=password=cmkpass --namespace simplego
-
-port-forwarding:
-	kubectl port-forward --namespace simplego svc/simplego-service 8080:8080
 
 # Kolejność
 # make k3d-apply-simplego-helm-chart-colima
@@ -140,3 +122,60 @@ gotestsum:
 	go install gotest.tools/gotestsum@latest
 	export PATH=$PATH:$HOME/go/bin
 
+DBUSERNAME := postgres
+DBPASS := secret
+DBNAME := simplego
+DB_ADMIN_PASS_KEY := secret
+PSQL_RELEASE_NAME := simplegodb
+
+psql-add-to-cluster:
+	helm repo add bitnami https://charts.bitnami.com/bitnami
+	helm repo update
+	helm upgrade --install '$(PSQL_RELEASE_NAME)' bitnami/postgresql \
+	  --set image.repository=bitnamilegacy/postgresql \
+	  --set global.postgresql.auth.username=$(DBUSERNAME) \
+	  --set global.postgresql.auth.password=$(DBPASS) \
+	  --set global.postgresql.auth.database=$(DBNAME) \
+	  --set global.postgresql.auth.secretKeys.adminPasswordKey=$(DB_ADMIN_PASS_KEY) \
+	  --namespace $(NAMESPACE) \
+	  --create-namespace
+
+create-simplego-db: psql-port-forward wait-for-psql
+	PGPASSWORD=$(DBPASS) psql -h localhost -p 5432 -U $(DBUSERNAME) -f ./db/db.sql
+
+psql-port-forward: wait-for-psql
+	@if ! lsof -i :5432 >/dev/null; then \
+		echo "Start 5432 port-forward"; \
+		kubectl port-forward svc/$(PSQL_RELEASE_NAME) 5432:5432 -n $(NAMESPACE) & \
+	else \
+		echo "Port 5432 already forwarded"; \
+	fi
+
+psql-secret:
+	kubectl create secret generic '$(PSQL_RELEASE_NAME)' --from-literal=password='$(DBPASS)' --namespace '$(NAMESPACE)'
+
+wait-for-pod:
+	@echo "Waiting for pod with label $(LABEL) in namespace $(NAMESPACE) to be Running..."
+	@while [ -z "$$(kubectl get pod -n $(NAMESPACE) -l $(LABEL) -o jsonpath='{.items[*].metadata.name}')" ]; do \
+		echo "No pods found, waiting for pod creation..."; \
+		sleep 2; \
+	done
+	@while [ "$$(kubectl get pod -n $(NAMESPACE) -l $(LABEL) -o jsonpath='{.items[0].status.phase}' 2>/dev/null)" != "Running" ]; do \
+		echo "Pod not ready, waiting..."; \
+		sleep 2; \
+	done
+	@echo "Pod is Running!"
+
+# wait-for-psql:
+# 	@$(MAKE) wait-for-pod LABEL=app.kubernetes.io/name=postgresql
+
+wait-for-psql:
+	@kubectl wait \
+		--for=condition=Ready pod \
+		-l app.kubernetes.io/instance=$(PSQL_RELEASE_NAME) \
+		-n $(NAMESPACE) \
+		--timeout=120s
+
+psql-cli: psql-port-forward
+	@PGPASSWORD="$(DBPASS)" \
+	psql -h 127.0.0.1 -p 5432 -U postgres -d $(DBNAME)
