@@ -206,3 +206,16 @@ p = d // ❌ błąd — Data nie implementuje Printer (bo metoda ma *Data receiv
 ---
 
 Chcesz, żebym pokazał realny przykład z aplikacji (np. `Repository` interface w Go), gdzie to ma duże znaczenie i łatwo o błąd w praktyce?
+
+
+# Pytania Pawla
+jak zrobić kopię mapy
+tematy: deepcopy, kopiowaniw referencji
+
+czy golang spełnia kryteria języka obiektowego
+
+jak synchronizować wątki
+
+kanały buforowanie/nieburoforwane
+
+slice/array
