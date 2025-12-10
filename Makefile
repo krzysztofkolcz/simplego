@@ -129,16 +129,19 @@ DB_ADMIN_PASS_KEY := secret
 PSQL_RELEASE_NAME := simplegodb
 
 psql-add-to-cluster:
+	kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
+	kubectl apply -f helm/go-hello/go-hello/charts/configmap.yaml -n $(NAMESPACE)
 	helm repo add bitnami https://charts.bitnami.com/bitnami
 	helm repo update
-	helm upgrade --install '$(PSQL_RELEASE_NAME)' bitnami/postgresql \
-	  --set image.repository=bitnamilegacy/postgresql \
+	helm upgrade --install $(PSQL_RELEASE_NAME) bitnami/postgresql \
 	  --set global.postgresql.auth.username=$(DBUSERNAME) \
 	  --set global.postgresql.auth.password=$(DBPASS) \
 	  --set global.postgresql.auth.database=$(DBNAME) \
 	  --set global.postgresql.auth.secretKeys.adminPasswordKey=$(DB_ADMIN_PASS_KEY) \
+	  --set primary.existingConfigmap=postgres-custom-config \
 	  --namespace $(NAMESPACE) \
 	  --create-namespace
+# 	  --set image.repository=bitnamilegacy/postgresql \
 
 create-simplego-db: psql-port-forward wait-for-psql
 	PGPASSWORD=$(DBPASS) psql -h localhost -p 5432 -U $(DBUSERNAME) -f ./db/db.sql

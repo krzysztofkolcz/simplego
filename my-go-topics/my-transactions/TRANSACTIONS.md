@@ -76,6 +76,8 @@ Dlatego SELECT może czytać wersję historyczną,
 a UPDATE może pracować nad aktualną — bez blokowania się nawzajem.
 
 # Transakcje: 4. SELECT FOR UPDATE – do czego służy?
+Nikt nie może pisać w te wiersze oprócz mnie.
+
 SELECT ... FOR UPDATE blokuje wybrane wiersze na czas transakcji.
 
 ```
@@ -91,6 +93,10 @@ Skutki:
 To jest pesymistyczne blokowanie:
     zakładamy, że konflikt na pewno wystąpi,
     więc blokujemy wiersz od razu.
+
+# Transakcje: SELECT FOR SHARE - do czego słuzy
+Nikt nie może zmienić danych, które czytam.
+Ale inni mogą je również czytać.
 
 # Transakcje: Update 2 wierszy o tym samym id przez rózne transakcje - READ COMMITED
 ```
@@ -338,7 +344,7 @@ non-repeatable read: drugi SELECT zwróci tę samą wartość, nawet jeśli inna
 
 phantom read: PostgreSQL nie pokazuje nowych wierszy dodanych po rozpoczęciu transakcji.
 
-## Transakcje: Problemy - Serialization anomaly
+## Transakcje: Problemy - Serialization anomaly (TODO - jakie poziomy?)
 Serialization anomaly (anomalia serializacji) to sytuacja, w której wynik wykonania grupy transakcji równoległych nie jest równoważny żadnemu możliwemu wykonaniu sekwencyjnemu (serialnemu).
 
 Innymi słowy:
@@ -346,6 +352,166 @@ Innymi słowy:
 Transakcje razem zrobiły coś, czego nie da się odtworzyć, gdyby wykonać je jedna po drugiej.
 
 To jest najpoważniejszy rodzaj problemów w izolacji transakcji — oznacza, że baza danych nie zachowała poprawnej izolacji logicznej.
+
+## Transakcje: Problemy REPETABLE READ - 
+### Transakcje: Problemy REPETABLE READ - problem opisany w dokumentacji - delete dla website:
+Możesz wyjaśnić na przykładzie tą częśc dokumentacji postgresql 
+(https://www.postgresql.org/docs/current/transaction-iso.html):
+
+More complex usage can produce undesirable results in Read Committed mode. 
+For example, consider a DELETE command operating on data that is being both 
+added and removed from its restriction criteria by another command, 
+e.g., assume website is a two-row table with website.hits equaling 9 and 10:
+
+BEGIN;
+UPDATE website SET hits = hits + 1;
+-- run from another session:  DELETE FROM website WHERE hits = 10;
+COMMIT;
+The DELETE will have no effect even though there is a website.hits = 10 
+row before and after the UPDATE. 
+This occurs because the pre-update row value 9 is skipped, 
+and when the UPDATE completes and DELETE obtains a lock, 
+the new row value is no longer 10 but 11, which no longer matches the criteria.
+
+### Wytlumaczenie:
+#### Sytuacja poczatkowa
+Tabela 'website'
+| id | hits |
+| -- | ---- |
+| 1  | 9    |
+| 2  | 10   |
+
+
+#### S1:
+```
+BEGIN;
+UPDATE website SET hits = hits + 1;
+```
+
+To oznacza:
+| id | old hits | new hits |
+| -- | -------- | -------- |
+| 1  | 9        | 10       |
+| 2  | 10       | 11       |
+
+Ale S1 jeszcze nie zrobiła COMMIT, więc inne transakcje nie widzą tych zmian.
+
+#### S2: (w tym czasie uruchamia)
+```
+BEGIN
+DELETE FROM website WHERE hits = 10;
+```
+Co S2 widzi?
+Ponieważ S1 jeszcze nie commitowała:
+| id | hits widoczne w S2 |
+| -- | ------------------ |
+| 1  | 9                  |
+| 2  | 10                 |
+
+DELETE działa tak:
+
+1. Skanuje tabelę na żywo (READ COMMITTED)
+2. Szuka wierszy o hits = 10
+3.  Trafia na:
+
+| id=1 → hits=9 → NIE pasuje → pomija
+| id=2 → hits=10 → PASUJE → próbuje usunąć
+
+ALE…
+
+Aby usunąć wiersz, musi zdobyć lock na wierszu.
+Idzie więc po wierszu:
+S2 próbuje zlockować wiersz id=2
+ALE wiersz jest aktualizowany przez S1 (UPDATE website SET hits = hits + 1)
+S2 czeka aż S1 skończy UPDATE
+
+#### Co dzieje się po stronie S1?
+Kiedy S1 wykonuje:
+```
+COMMIT;
+```
+Zmiany staja sie widoczne:
+| id | hits |
+| -- | ---- |
+| 1  | 10   |
+| 2  | 11   |
+
+#### Co robi S2 po odblokowaniu wiersza?
+Po tym jak S1 zwolni locki, S2 dostaje lock na wierszu ale musi sprawdzić, czy warunek wciąż pasuje.
+
+To jest bardzo ważne:
+PostgreSQL nie usuwa wiersza, jeśli po odblokowaniu nie spełnia już warunku WHERE.
+
+Wiersz id=2 W TEJ CHWILI MA → hits = 11
+
+Już nie pasuje do WHERE hits = 10.
+
+#### ❌ Wniosek: DELETE niczego nie usuwa
+
+Mamy “okno czasowe”, w którym:
+W momencie skanowania tabela miała hits = 10
+Ale w momencie uzyskania locka wartość była już 11
+Więc DELETE nie ma prawa tego ruszyć
+
+#### Jak to naprawić?
+##### 1) Użyj REPEATABLE READ
+
+Zapytanie DELETE zobaczy stabilny snapshot.
+
+BEGIN ISOLATION LEVEL REPEATABLE READ;
+DELETE FROM website WHERE hits = 10;
+COMMIT;
+
+
+Wtedy:
+widzi wartość 10
+próbuje skasować
+po odblokowaniu wiersza okazuje się, że wartość to 11
+→ PostgreSQL rzuci serialization failure
+I to jest poprawne zachowanie.
+
+##### 2) SELECT FOR UPDATE przed DELETE
+```
+BEGIN;
+SELECT id FROM website WHERE hits = 10 FOR UPDATE;
+DELETE FROM website WHERE hits = 10;
+COMMIT;
+```
+Gdy S1 próbuje zmienić wiersz, zatrzyma się — bo FOR UPDATE trzyma lock.
+
+#### Przykład wystąpienia problemu w tabeli website dla READ COMMITED:
+```
+CREATE TABLE website (
+  id serial PRIMARY KEY,
+  hits integer
+);
+
+INSERT INTO website (hits) VALUES (9), (10);
+```
+
+S1:
+```
+BEGIN;
+UPDATE website SET hits = hits + 1;
+```
+To aktualizuje:
+id=1, 9 → 10
+id=2, 10 → 11
+ALE trzyma blokady do czasu COMMIT, więc inne transakcje muszą czekać.
+
+S2:
+```
+DELETE FROM website WHERE hits = 10;
+```
+S2 widzi:
+| id | hits |
+| -- | ---- |
+| 1  | 9    |
+| 2  | 10   |
+
+Więc próbuje usunąć id=2, ale…
+musi zdobyć blokadę, która jest trzymana przez S1.
+
 
 # TODO - Transakcje: SSI (Serializable Snapshot Isolation)
 ```
