@@ -32,7 +32,45 @@ Poziom izolacji, 	Opis,	Co chroni?
     chroni przed „brudnymi odczytami”, ale nie chroni przed non-repeatable reads i phantom reads.
 
 
-### SELECT sees updates not commited within its own transaction
+### Dokumentacja - wyjaśnienie chatgpt - snapshot dla SELECT vs dwa SELECTY
+#### Dokumentacja
+```
+Read Committed is the default isolation level in PostgreSQL. 
+When a transaction uses this isolation level, a SELECT query (without a FOR UPDATE/SHARE clause) 
+sees only data committed before the query began; it never sees either uncommitted data 
+or changes committed by concurrent transactions during the query's execution. 
+In effect, a SELECT query sees a snapshot of the database as of the instant the query begins to run. 
+However, SELECT does see the effects of previous updates executed within its own transaction, 
+even though they are not yet committed. 
+Also note that two successive SELECT commands can see different data, 
+even though they are within a single transaction, 
+if other transactions commit changes after the first SELECT starts and before the second SELECT starts.
+```
+
+#### Pytanie o rónicę pomidzy snapshot SELECT vs dwa SELECT
+Możesz wyjaśnić mi to:
+"it never sesss ... changes committed by concurrent transactions during the query's execution"? 
+Jak to się ma do zdania 
+"note that two successive SELECT commands can see different data,
+even though they are within a single transaction, 
+if other transactions commit changes after the first SELECT starts and before the second SELECT starts"?
+
+
+#### Wyjaśnienie - chatgpt - rónica pomidzy snapshot SELECT vs dwa SELECT
+
+PostgreSQL robi snapshot stanu bazy:
+"co było zatwierdzone dokładnie w chwili startu zapytania"
+I to jest snapshot tylko dla jednego zapytania, a nie dla całej transakcji.
+
+"it never sees ... changes committed by concurrent transactions during the query's execution"
+Tzn.:
+Jeśli zapytanie SELECT trwa np. 100 ms
+i w czasie jego działania inna transakcja commitnie zmianę…
+to SELECT NIE zobaczy tej zmiany, bo snapshot był utworzony wcześniej.
+SELECT zawsze widzi konsekwentny stan bazy na początku swojego działania i tego się trzyma.
+
+
+#### Wyjaśnienie - SELECT sees updates not commited within its own transaction
 'However, SELECT does see the effects of previous updates executed within its own transaction, 
 even though they are not yet committed.'
 
@@ -56,6 +94,241 @@ select * from products;
   2 |   400
 (2 rows)
 ```
+
+### Dokumentacja - INSERT ON CONFLICT DO UPDATE dla READ COMMITED
+
+"INSERT with an ON CONFLICT DO UPDATE clause behaves similarly. 
+In Read Committed mode, each row proposed for insertion will either insert or update. 
+Unless there are unrelated errors, one of those two outcomes is guaranteed. 
+If a conflict originates in another transaction whose effects are not yet visible to the INSERT, 
+the UPDATE clause will affect that row, 
+even though possibly no version of that row is conventionally visible to the command."
+
+Czyli dla tabeli products:
+
+T1:
+```
+BEGIN
+INSERT INTO products (id, price) VALUES (3, 1000); 
+```
+
+T2:
+```
+BEGIN;
+
+INSERT INTO products (id, price)
+VALUES (3, 500)
+ON CONFLICT (id)
+DO UPDATE SET price = EXCLUDED.price;
+```
+
+T1
+```
+COMMIT;
+```
+
+T2
+```
+COMMIT; // zrobi update price na 500
+```
+
+#### EXCLUDED
+Co oznacza EXCLUDED.price?
+EXCLUDED to specjalna tabela logiczna zawierająca dane z VALUES(...).
+Czyli:
+EXCLUDED.id → wartość próbowana do wstawienia
+EXCLUDED.price → cena z nowego insertu
+
+#### EXCLUDED - najczęściej uzywana wersja:
+Najczęściej używana wersja:
+Update tylko wtedy, gdy wartość się różni:
+```
+INSERT INTO products (id, price)
+VALUES (3, 500)
+ON CONFLICT (id)
+DO UPDATE SET price = EXCLUDED.price
+WHERE products.price IS DISTINCT FROM EXCLUDED.price;
+```
+
+### Dokumentacja - MERGE
+```
+MERGE allows the user to specify various combinations of INSERT, UPDATE and DELETE subcommands. 
+A MERGE command with both INSERT and UPDATE subcommands looks similar to INSERT with an ON CONFLICT DO UPDATE 
+clause but does not guarantee that either INSERT or UPDATE will occur. 
+If MERGE attempts an UPDATE or DELETE and the row is concurrently updated but the join condition still passes 
+for the current target and the current source tuple, 
+then MERGE will behave the same as the UPDATE or DELETE commands 
+and perform its action on the updated version of the row. 
+However, because MERGE can specify several actions and they can be conditional, 
+the conditions for each action are re-evaluated on the updated version of the row, 
+starting from the first action, even if the action that had originally matched appears later in the list of actions. 
+On the other hand, if the row is concurrently updated so that the join condition fails, 
+then MERGE will evaluate the command's NOT MATCHED BY SOURCE and NOT MATCHED [BY TARGET] actions next, 
+and execute the first one of each kind that succeeds. 
+If the row is concurrently deleted, 
+then MERGE will evaluate the command's NOT MATCHED [BY TARGET] actions, 
+and execute the first one that succeeds. If MERGE attempts an 
+INSERT and a unique index is present and a duplicate row is concurrently inserted, 
+then a uniqueness violation error is raised; 
+MERGE does not attempt to avoid such errors by restarting evaluation of MATCHED conditions.
+```
+#### TODO - ogarnac komende MERGE (NOT MATCHED BY SOURCE, NOT MATCHED BY TARGET)
+#### Chatgpt wytlumaczenie
+MERGE:
+
+może mieć wiele akcji (UPDATE, DELETE, INSERT),
+każda warunkowa,
+i żadna nie jest gwarantowana — musi być ponownie oceniona jeśli wiersz zmienił się równolegle.
+
+##### MERGE — zasada pod konkurencją
+
+Kiedy MERGE działa na wierszu:
+sprawdza MATCHED / NOT MATCHED (czy target istnieje)
+wybiera akcję (UPDATE, DELETE, INSERT)
+próbuje ją zrobić
+W tym czasie wiersz może być:
+równolegle UPDATE-owany
+równolegle DELETE-owany
+równolegle INSERT-owany (konflikt unique)
+Wtedy:
+
+###### PRZYPADEK 1 — Wiersz równolegle UPDATE-owany, ale JOIN dalej pasuje
+
+MERGE powtórnie ocenia CAŁĄ listę akcji od początku.
+
+Dlaczego?
+Bo warunki mogły się zmienić.
+
+##### PRZYPADEK 2 — Wiersz równolegle UPDATE-owany i JOIN JUŻ NIE PASUJE
+
+→ MERGE przechodzi do NOT MATCHED BY SOURCE
+lub NOT MATCHED akcji i próbuje je wykonać.
+
+##### PRZYPADEK 3 — Wiersz równolegle DELETE-owany
+
+→ MERGE traktuje jak NOT MATCHED BY TARGET
+i wykonuje pierwszą pasującą akcję z tej sekcji.
+
+##### PRZYPADEK 4 — INSERT powoduje conflict unikalny
+
+→ MERGE rzuca błąd,
+nie robi automatycznego retry,
+nie przechodzi do UPDATE.
+
+To jest największa różnica w stosunku do INSERT ON CONFLICT.
+
+##### Przykład
+```
+CREATE TABLE products (
+  id   INT PRIMARY KEY,
+  name TEXT,
+  price INT
+);
+```
+```
+INSERT INTO products (id,name,price) VALUES (1, 'Phone', 700)
+```
+Merge:
+```
+MERGE INTO products p
+USING (VALUES (1, 'Phone', 800)) AS s(id, name, price)
+ON p.id = s.id
+WHEN MATCHED AND s.price > p.price THEN
+    UPDATE SET price = s.price           -- akcja 1
+WHEN MATCHED THEN
+    DELETE                                -- akcja 2
+WHEN NOT MATCHED THEN
+    INSERT (id, name, price)
+    VALUES (s.id, s.name, s.price);       -- akcja 3
+```
+
+###### PRZYPADEK 1 — MERGE chce UPDATE, ktoś zmienił wiersz, ale JOIN dalej pasuje
+
+T1 (MERGE) zaczyna:
+
+warunek: s.price > p.price
+→ 800 > 700 → pasuje → UPDATE
+
+ale zanim zrobi UPDATE:
+
+T2:
+```
+UPDATE products SET price = 750 WHERE id=1;
+```
+
+Co zrobi MERGE?
+blokuje się, czeka
+widzi zmieniony wiersz (price 750)
+ponownie ocenia warunki od początku:
+800 > 750 → nadal pasuje
+robi UPDATE do 800
+
+NERW: warunki zawsze oceniane ponownie po kolizji.
+
+###### PRZYPADEK 2 — w trakcie T1 warunek przestaje pasować
+T1 (MERGE) zaczyna:
+
+→ chce UPDATE, bo 800 > 700
+
+T2 w międzyczasie:
+```
+UPDATE products SET price = 900 WHERE id=1;
+```
+
+MERGE po odblokowaniu:
+
+widzi nowy price = 900
+re-eval całego MERGE:
+800 > 900 → ❌ już nie pasuje
+
+przechodzi do kolejnej akcji:
+WHEN MATCHED THEN DELETE
+DELETE wykona się!
+Czyli MERGE może nagle zrobić DELETE zamiast UPDATE.
+
+To jest to, o czym mówi dokumentacja.
+
+###### PRZYPADEK 3 — target został usunięty
+
+T2:
+```
+DELETE FROM products WHERE id=1;
+```
+
+T1 po re-eval:
+
+MATCHED → już nie
+
+przechodzi do:
+WHEN NOT MATCHED THEN INSERT
+
+result: MERGE zrobi INSERT
+
+###### PRZYPADEK 4 — równoległy INSERT powoduje conflict
+Załóżmy:
+
+T1 (MERGE):
+```
+INSERT (id,name,price) VALUES (2,'Phone',800)
+```
+
+T2 w tej samej chwili:
+```
+INSERT INTO products VALUES (2,'Phone',999);
+```
+
+
+Efekt:
+
+MERGE rzuca błąd:
+
+ERROR: duplicate key value violates unique constraint "products_pkey"
+
+
+MERGE nie próbuje przejść do UPDATE,
+w przeciwieństwie do:
+
+INSERT ... ON CONFLICT DO UPDATE
 
 
 ## REPEATABLE READ	
@@ -677,3 +950,9 @@ Co w przypadku, gdy update dotyczy innej kolumny?
 
 # TODO - serial number
 Przyklad np. zapytnia, gdzie modyfikowany jest typ danych 'serial', ktory powinien byc widoczny w transakcji 'Repetable Read', ale nie powinny byc widoczne zadne inne zmiany
+
+
+
+# TODO
+Szkolenie finansowane nawet na zewnatrz
+Mentoring?
