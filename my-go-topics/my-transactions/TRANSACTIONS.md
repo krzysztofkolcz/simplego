@@ -153,8 +153,10 @@ WHERE products.price IS DISTINCT FROM EXCLUDED.price;
 ### Dokumentacja - MERGE
 ```
 MERGE allows the user to specify various combinations of INSERT, UPDATE and DELETE subcommands. 
+
 A MERGE command with both INSERT and UPDATE subcommands looks similar to INSERT with an ON CONFLICT DO UPDATE 
 clause but does not guarantee that either INSERT or UPDATE will occur. 
+
 If MERGE attempts an UPDATE or DELETE and the row is concurrently updated but the join condition still passes 
 for the current target and the current source tuple, 
 then MERGE will behave the same as the UPDATE or DELETE commands 
@@ -162,16 +164,26 @@ and perform its action on the updated version of the row.
 However, because MERGE can specify several actions and they can be conditional, 
 the conditions for each action are re-evaluated on the updated version of the row, 
 starting from the first action, even if the action that had originally matched appears later in the list of actions. 
+
 On the other hand, if the row is concurrently updated so that the join condition fails, 
 then MERGE will evaluate the command's NOT MATCHED BY SOURCE and NOT MATCHED [BY TARGET] actions next, 
 and execute the first one of each kind that succeeds. 
+
 If the row is concurrently deleted, 
 then MERGE will evaluate the command's NOT MATCHED [BY TARGET] actions, 
-and execute the first one that succeeds. If MERGE attempts an 
-INSERT and a unique index is present and a duplicate row is concurrently inserted, 
+and execute the first one that succeeds. 
+
+If MERGE attempts an INSERT and a unique index is present and a duplicate row is concurrently inserted, 
 then a uniqueness violation error is raised; 
 MERGE does not attempt to avoid such errors by restarting evaluation of MATCHED conditions.
 ```
+
+Rozumiem, ze dla MERGE sprawdzane sa warunki wystepujace w ON.
+Jezeli warunek jest spelniony, a wiersz jest modyfikowany przez inna transakcje, jest re-ewaluacja.
+Jezeli warunek nie jest spelniony, a rownolegla transakcja zmowyfikuje tabele (np. zrobi insert),
+to nie ma re-ewaluacji?
+Czyli moze byc tak,
+
 #### TODO - ogarnac komende MERGE (NOT MATCHED BY SOURCE, NOT MATCHED BY TARGET)
 #### Chatgpt wytlumaczenie
 MERGE:
@@ -336,9 +348,118 @@ INSERT ... ON CONFLICT DO UPDATE
     chroni przed brudnymi odczytami i non-repeatable reads; 
     w PostgreSQL chroni także skutecznie przed phantom reads dzięki MVCC.
 
+### Dokumentacja
+```
+UPDATE, DELETE, MERGE, SELECT FOR UPDATE, and SELECT FOR SHARE commands behave the same as SELECT in terms 
+of searching for target rows: they will only find target rows that were committed as of the transaction start time. 
+However, such a target row might have already been updated (or deleted or locked) by another concurrent transaction by
+the time it is found. In this case, the repeatable read transaction will wait for the first updating 
+transaction to commit or roll back (if it is still in progress). 
+If the first updater rolls back, then its effects are negated and the repeatable read transaction can proceed with 
+updating the originally found row. But if the first updater commits (and actually updated or deleted the row, 
+not just locked it) then the repeatable read transaction will be rolled back with the message
+```
+
+#### Pytanie - w którym momencie transakcja robi snapshot?
+Zaraz po 'BEGIN', czy w momencie wykonania pierwszego zapytania?
+
+##### Chat - odpowiedz
+W PostgreSQL dla poziomu izolacji REPEATABLE READ 
+snapshot jest robiony w momencie wykonania pierwszego zapytania SQL, a nie w chwili BEGIN.
+
+Ale po tym pierwszym zapytaniu snapshot jest już stały aż do COMMIT / ROLLBACK.
+
+BEGIN:
+nie tworzy snapshotu
+tylko otwiera kontekst transakcji
+
+###### Przykład krok po kroku
+🟦 Sesja A (REPEATABLE READ)
+BEGIN ISOLATION LEVEL REPEATABLE READ;
+-- brak snapshotu
+
+
+⏳ czekasz 10 sekund...
+
+🟩 Sesja B (w międzyczasie)
+INSERT INTO products VALUES (1, 500);
+COMMIT;
+
+🟦 Sesja A – pierwsze zapytanie
+SELECT * FROM products;
+
+
+👉 TU powstaje snapshot
+👉 nowy wiersz z Sesji B JEST widoczny
+
+🟩 Sesja B ponownie
+INSERT INTO products VALUES (2, 600);
+COMMIT;
+
+🟦 Sesja A – kolejne zapytanie
+SELECT * FROM products;
+
+
+👉 TEGO wiersza już NIE zobaczy
+(snapshot jest zamrożony)
+
+#### Pytanie - co, jezeli update rownoleglej transakcji dotyczy kolumny, ktora nie jest zmieniana w aktualnej?
+##### Chat - odpowiedz
+Krótka odpowiedź
+
+TAK — w REPEATABLE READ również dostaniesz błąd,
+nawet jeśli równoległa transakcja zmienia inną kolumnę tego samego wiersza.
+
+Dlaczego tak się dzieje?
+Bo PostgreSQL wersjonuje całe wiersze, a nie kolumny.
+UPDATE zawsze tworzy nową wersję CAŁEGO wiersza
+nawet jeśli zmieniasz jedną kolumnę
+stara wersja wiersza zostaje „zamrożona” w MVCC
+W REPEATABLE READ:
+Twoja transakcja pracuje na jednym, stałym snapshotcie
+nie może „dogadać się” z nową wersją wiersza, której nie widziała
+
+###### Przyklad
+🟦 Transakcja T1 (REPEATABLE READ)
+BEGIN ISOLATION LEVEL REPEATABLE READ;
+SELECT * FROM products WHERE id = 1;
+-- widzi: price=100, stock=10
+
+(snapshot zamrożony)
+
+🟩 Transakcja T2 (READ COMMITTED)
+BEGIN;
+UPDATE products SET stock = 9 WHERE id = 1;
+COMMIT;
+
+
+👉 zmienia inną kolumnę
+
+🟦 T1 próbuje:
+UPDATE products SET price = 120 WHERE id = 1;
+
+❌ Wynik:
+ERROR: could not serialize access due to concurrent update
+
 ## SERIALIZABLE	
     Najsilniejszy — PostgreSQL gwarantuje, że wynik działania jest taki, 
     jakby transakcje były wykonywane jedna po drugiej.
+
+
+### Dokumentacja
+The Serializable isolation level provides the strictest transaction isolation. 
+This level emulates serial transaction execution for all committed transactions; 
+as if transactions had been executed one after another, serially, rather than concurrently. 
+However, like the Repeatable Read level, applications using this level must be prepared to retry transactions 
+due to serialization failures.
+In fact, this isolation level works exactly the same as Repeatable Read except that it also monitors 
+for conditions which could make execution of a concurrent set of serializable transactions behave in a manner 
+inconsistent with all possible serial (one at a time) executions of those transactions. 
+This monitoring does not introduce any blocking beyond that present in repeatable read, 
+but there is some overhead to the monitoring, 
+and detection of the conditions which could cause a serialization anomaly will trigger a serialization failure.
+
+
 
 # Transakcje: 3. MVCC – jak PostgreSQL to ogarnia
 
