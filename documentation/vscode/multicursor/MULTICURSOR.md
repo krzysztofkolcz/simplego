@@ -227,6 +227,7 @@ Zmienić `fmt.Println` na `log.Println`
 ### 🪄 Kroki:
 
 1. `Ctrl + F` → wyszukaj `fmt.Println`
+Mac: Command + f (???)
 2. `Alt + Enter` → doda kursor w każdym dopasowaniu
 3. Wpisz `log.Println`
 

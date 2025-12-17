@@ -1,6 +1,9 @@
 package multicursor
 
-import "fmt"
+import (
+	"fmt"
+	"log"
+)
 
 type typeA string
 type typeB string
@@ -8,28 +11,32 @@ type typeC string
 type typeD string
 type typeE string
 
-func (a typeA) doSomething() {}
-func (a typeB) doSomething() {}
-func (a typeC) doSomething() {}
-func (a typeD) doSomething() {}
-func (a typeE) doSomething() {}
+func (a typeA) doSomethingElse() {}
+func (a typeB) doSomethingElse() {}
+func (a typeC) doSomethingElse() {}
+func (a typeD) doSomethingElse() {}
+func (a typeE) doSomethingElse() {}
 
 func main() {
-	h, n, o, p, q := newH()
-	h.doSomething()
-	n.doSomething()
-	o.doSomething()
-	p.doSomething()
-	q.doSomething()
+	resultH, n, o, p, q := newH()
+	resultH.doSomethingElse()
+	n.doSomethingElse()
+	log.Println()
+	o.doSomethingElse()
+	log.Println()
+	p.doSomethingElse()
+	log.Println()
+	q.doSomethingElse()
+	log.Println()
 
-	fmt.Println(h, n, o, p, q)
+	fmt.Println(resultH, n, o, p, q)
 }
 
 func newH() (typeA, typeB, typeC, typeD, typeE) {
-	var h typeA = "helllo h"
+	var resultH typeA = "helllo resultH"
 	var y typeB = "helllo B"
 	var z typeC = "helllo C"
 	var k typeD = "helllo D"
 	var l typeE = "helllo E"
-	return h, y, z, k, l
+	return resultH, y, z, k, l
 }
