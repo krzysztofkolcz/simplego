@@ -1,4 +1,6 @@
 # Kurs: Wdrożenie prostego programu Go z Helm — krok po kroku
+To chyba nie jest dokladnie ta konwersacja, ale podobne:
+https://chatgpt.com/c/69038bcb-f20c-8326-b77d-5d3f159093da
 
 Ten kurs prowadzi Cię od *najprostszego* programu w Go do działającego wdrożenia na klastrze Kubernetes przy użyciu Helm. Zakładam, że masz lokalny klaster (minikube / kind / k3d / klaster w chmurze) oraz `kubectl`, `helm`, `docker`/`podman` i `git`.
 
@@ -107,11 +109,75 @@ Zbuduj lokalnie:
 docker build -t kkolcz/go-hello:0.1.0 .
 ```
 
+```makefile
+make build-image
+```
+
 Uwaga na rózne wersje go w Dockerfile i go.mod!
 
----
+## Uruchomienie rejestru, klastra k3d, import image do rejestru
+```
+k3d cluster create go-hello-cluster \
+  --registry-create go-hello-registry:0.0.0.0:5000
+```
 
-## 4. Push obrazu do rejestru (np. Docker Hub)
+```makefile
+# 0
+create-k3d-cluster-with-registry
+	k3d cluster create $(CLUSTER_NAME) -p "30083:30083@server:0" --api-port 127.0.0.1:6445 --registry-create $(REGISTRY_NAME):$(REGISTRY_PORT); \
+  ...
+```
+
+lub osobno (ale z tym mialem problemy testujac):
+```
+k3d registry create go-hello-registry --port 5000
+k3d cluster create go-hello-cluster --registry-use k3d-go-hello-registry:5000
+```
+
+Tagowanie image
+```
+docker build -t kkolcz/go-hello:0.1.0 .
+docker tag kkolcz/go-hello:0.1.0 k3d-go-hello-registry:5000/kkolcz/go-hello:0.1.0
+```
+```makefile
+# 1
+build-image:
+	docker build -t $(TAG) .
+
+# 2
+tag-image:
+	docker tag $(TAG) k3d-$(REGISTRY_NAME):$(REGISTRY_PORT)/$(TAG)
+```
+
+
+k3d-$(REGISTRY_NAME):$(REGISTRY_PORT)/$(TAG) 
+to jest „tylko” tag, ale ten tag ma bardzo konkretne znaczenie – wskazuje do jakiego rejestru Docker ma wysłać obraz.
+
+
+Pushowanie image. Registry dostepne z hosta pod adresem localhost:5000
+Wyjaśnienie dlaczego pushuje na localhost:5000 a nie na k3d-go-hello-registry:5000
+https://chatgpt.com/c/69666347-4bc0-8327-96f3-2ce4ba80eca4
+
+Chodzi o to, ze k3d-go-hello-registry:5000 jest dostepne wewnatrz sieci kubernetesa, a nie z hosta.
+```
+docker push localhost:5000/kkolcz/go-hello:0.1.0
+```
+```makefile
+# 3
+k3d-import-image: build-image
+	@echo "Importing docker image into k3d"
+	docker push localhost:$(REGISTRY_PORT)/$(TAG)
+```
+Musze otagowac image jako localhost:$(REGISTRY_PORT)/$(TAG)
+
+### Import image bez rejestru
+
+```bash
+docker build -t kkolcz/go-hello:0.1.0 .
+k3d image import --cluster go-hello-cluster kkolcz/go-hello:0.1.0
+```
+
+### Push obrazu do rejestru (np. Docker Hub)
 
 Zaloguj się i wypchnij:
 
@@ -120,11 +186,24 @@ docker login
 docker push kkolcz/go-hello:0.1.0
 ```
 
-Jeżeli używasz GHCR, użyj odpowiednich tagów i uwierzytelnień.
+## List komend
+### Lista klastrow
+```
+k3d cluster list
 
-> Alternatywa: `kind`/`minikube` umożliwiają użycie obrazów lokalnych bez push.
+```
 
----
+### Rejestr
+
+pobranie obrazow z lokalnego registry (dziala dla rejstru lokalnego na porcie 5000)
+```
+curl http://localhost:5000/v2/_catalog
+```
+
+lista tagow:
+```
+curl http://localhost:5000/v2/kkolcz/go-hello/tags/list
+```
 
 ## 5. Tworzymy Helm Chart
 
@@ -222,8 +301,61 @@ spec:
     app.kubernetes.io/name: {{ include "go-hello.name" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
 ```
+## Wyjaśnienie go template engine wykorzystywanego w helm chart
+### {{ include "..." }}
+```
+name: {{ include "go-hello.fullname" . }}
+```
 
----
+include = funkcja Helm, która wywołuje definicję helpera z _helpers.tpl
+"go-hello.fullname" = nazwa helpera (w _helpers.tpl np. funkcja tworząca pełną nazwę release)
+. = kontekst całego release (wszystkie wartości .Values, .Release, itd.)
+
+### {{ .Values... }}
+```
+type: {{ .Values.service.type }}
+```
+
+.Values → zawartość pliku values.yaml
+.Values.service.type → bierze wartość z:
+```
+service:
+  type: ClusterIP
+```
+Wynik w YAML:
+```
+type: ClusterIP
+```
+### {{ .Release.Name }}
+Selector: include "go-hello.name" . i .Release.Name
+```
+selector:
+  app.kubernetes.io/name: {{ include "go-hello.name" . }}
+  app.kubernetes.io/instance: {{ .Release.Name }}
+```
+include "go-hello.name" . → helper w _helpers.tpl który zwraca np. samą nazwę chartu (go-hello)
+.Release.Name → nazwa release podana przy helm install demo ... → np. demo
+
+Jeśli instalujesz z:
+```
+helm install myapp ./go-hello
+```
+to .Release.Name = myapp.
+
+### Funkcje Golangowe – np. toYaml, indent, upper
+```
+{{ toYaml .Values.app.env | indent 12 }}
+```
+
+toYaml konwertuje strukturę z values.yaml do YAML.
+| indent 12 dodaje 12 spacji wcięcia, żeby było poprawnie w YAML.
+
+### {{ .Chart.Name }}
+.Chart – informacje o samym chartcie z Chart.yaml:
+```
+name: {{ .Chart.Name }}  # go-hello
+version: {{ .Chart.Version }}  # 0.1.0
+```
 
 ## 7. Wartości i nadpisywanie
 
@@ -231,6 +363,12 @@ Przykład instalacji:
 
 ```bash
 helm install demo ./go-hello -f ./go-hello/values.yaml
+```
+
+```makefile
+# 3
+k3d-install-helm:
+	helm install $(RELEASE) $(CHART_DIR) -f $(CHART_DIR)/values.yaml
 ```
 
 Nadpisanie pojedynczej wartości:
@@ -249,6 +387,122 @@ helm install --dry-run --debug demo ./go-hello -f ./go-hello/values.yaml
 
 ---
 
+### Podglad
+```
+helm template demo ./go-hello -f ./go-hello/values.yaml
+---
+# Source: go-hello/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-custom-config
+data:
+  postgresql.conf: |
+    log_lock_waits = on
+    log_min_duration_statement = 0
+    log_statement = 'all'
+---
+```
+```
+# Source: go-hello/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-go-hello
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 8080
+  selector:
+    app.kubernetes.io/name: go-hello
+    app.kubernetes.io/instance: demo
+```
+Co to robi:
+Service w Kubernetes działa jak wewnętrzny load balancer / DNS dla podów.
+type: ClusterIP → serwis dostępny tylko w klastrze.
+ports:
+port: 80 → port, pod którym service jest dostępny dla innych podów.
+targetPort: 8080 → port w kontenerze (deployment) do którego ruch jest przekierowywany.
+selector:
+Service łączy się z podami, które mają te etykiety (app.kubernetes.io/name: go-hello, app.kubernetes.io/instance: demo).
+💡 Efekt: inne pod-y w klastrze mogą zrobić curl http://demo-go-hello i trafią na pod go-hello.
+
+```
+---
+# Source: go-hello/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-go-hello
+  labels:
+    app.kubernetes.io/name: go-hello
+    app.kubernetes.io/instance: demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: go-hello
+      app.kubernetes.io/instance: demo
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: go-hello
+        app.kubernetes.io/instance: demo
+    spec:
+      containers:
+        - name: go-hello
+          image: "kkolcz/go-hello:0.1.0"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: APP_NAME
+              value: go-hello-from-helm
+```
+Deployment zarządza replikami podów – zapewnia, że w klastrze zawsze działa określona liczba podów.
+replicas: 1 → chcemy 1 pod.
+selector → mówi Deploymentowi, które pody zarządzać (etykiety).
+template → szablon poda, który Deployment tworzy.
+containers → kontener go-hello:
+image → obraz Dockera (kkolcz/go-hello:0.1.0)
+imagePullPolicy: IfNotPresent → pobiera obraz tylko jeśli go nie ma lokalnie
+ports → port 8080 w kontenerze
+env → zmienna środowiskowa APP_NAME ustawiona na go-hello-from-helm
+Efekt:
+Deployment tworzy pod z Twoim kontenerem
+Service demo-go-hello łączy się z tym podem przez port 80 → 8080
+
+```
+---
+# Source: go-hello/templates/tests/test-connection.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "demo-go-hello-test-connection"
+  labels:
+    helm.sh/chart: go-hello-0.1.0
+    app.kubernetes.io/name: go-hello
+    app.kubernetes.io/instance: demo
+    app.kubernetes.io/version: "1.16.0"
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: wget
+      image: busybox
+      command: ['wget']
+      args: ['demo-go-hello:80']
+  restartPolicy: Never
+```
+To jest Helm test hook ("helm.sh/hook": test) → uruchamiany po wdrożeniu przez helm test.
+Tworzy pod tymczasowy:
+Kontener busybox z poleceniem wget demo-go-hello:80
+Celem jest sprawdzenie, czy Service działa i odpowiada.
+restartPolicy: Never → pod nie jest restartowany automatycznie
+💡 Po teście pod zostanie usunięty przez Helm (nie zostaje w klastrze).
+
 ## 8. Instalacja i sprawdzenie
 
 Zainstaluj:
@@ -266,7 +520,7 @@ kubectl get svc
 kubectl logs -l app.kubernetes.io/name=go-hello
 ```
 
-Jeżeli używasz `minikube` lub `kind`, otwórz port:
+Jeżeli używasz `minikube` lub `kind` (na k3d tez dziala), otwórz port:
 
 ```bash
 kubectl port-forward svc/demo-go-hello 8080:80
@@ -349,3 +603,108 @@ Jeśli chcesz, mogę:
 * lub napisać pipeline CI (GitHub Actions).
 
 Powiedz, które z tych chcesz teraz — zrobię to natychmiast.
+
+
+## Widocznosc na zewnatrz
+### port-forward
+```
+kubectl port-forward svc/demo-go-hello 8080:80
+```
+
+```
+localhost:8080
+    ↓
+Service demo-go-hello :80
+    ↓
+Pod :8080
+```
+### NodePort
+```
+service:
+  type: NodePort
+  port: 80
+  nodePort: 30080
+```
+wtedy:
+```
+kubectl get nodes -o wide
+```
+
+i otwierasz:
+```
+http://localhost:30080
+```
+
+### Ingress
+Jeśli masz ingress-nginx w k3d
+```
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: go-hello
+spec:
+  rules:
+    - host: go-hello.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: demo-go-hello
+                port:
+                  number: 80
+```
+dodajesz do /etc/hosts:
+```
+127.0.0.1 go-hello.localhost
+```
+```
+http://go-hello.localhost
+```
+
+## MAKEFILE
+### k3d kubeconfig merge
+```
+k3d kubeconfig merge  $(CLUSTER_NAME) 
+```
+
+dodaje kubeconfig klastra k3d do Twojego lokalnego ~/.kube/config
+i (opcjonalnie) przełącza aktualny context.
+Każdy klaster k3d ma własny kubeconfig, który k3d trzyma wewnętrznie (nie zawsze zapisany w ~/.kube/config).
+ta komenda robi:
+pobiera kubeconfig tylko dla tego klastra
+scala (merge) go z:
+~/.kube/config
+
+Co dokładnie trafia do kubeconfig?
+Dodawane są
+```
+clusters:
+- name: k3d-go-hello-cluster
+  cluster:
+    server: https://127.0.0.1:6443
+    certificate-authority-data: ...
+
+users:
+- name: admin@k3d-go-hello-cluster
+  user:
+    client-certificate-data: ...
+    client-key-data: ...
+
+contexts:
+- name: k3d-go-hello-cluster
+  context:
+    cluster: k3d-go-hello-cluster
+    user: admin@k3d-go-hello-cluster
+
+```
+
+
+### Co robi --kubeconfig-switch-context?
+To automatycznie ustawia nowy klaster jako aktywny context.
+
+Aktualny kontekst zwroci:
+```
+kubectl config current-context
+```
