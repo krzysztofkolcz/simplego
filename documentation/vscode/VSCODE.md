@@ -76,11 +76,11 @@ Windows/linux:
 
 Przechodzenie po elementach w całym projekcie z linii komend:
 Mac: command + shift + p, #  (najpierw chyba usunąć >)
-Windows/linux:
+Windows/linux: ctrl + ship + p, (usunąć >), #
 
 Przechodzenie po elementach pliku:
 Mac: command + shift + .
-Windows/linux: 
+Windows/linux: ctrl + shift + .
 
 Przejście do linii nr.:
 Mac: control + g
@@ -130,7 +130,6 @@ Co robi ten snippet?
 Wpisujesz:
 
 gorec + TAB
-
 
 I dostajesz gotowy szablon, np.:
 

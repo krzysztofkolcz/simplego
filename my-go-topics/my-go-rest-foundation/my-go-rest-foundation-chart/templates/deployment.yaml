@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "my-go-rest-foundation-chart.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "my-go-rest-foundation-chart.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "my-go-rest-foundation-chart.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "my-go-rest-foundation-chart.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http          # 👈 MUSI SIĘ ZGADZAĆ
+              containerPort: 8080 # albo 80 – zgodnie z aplikacją
+              protocol: TCP
+          env:
+{{ toYaml .Values.app.env | indent 12 }}

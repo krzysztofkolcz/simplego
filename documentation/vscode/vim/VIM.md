@@ -19,7 +19,6 @@ Możesz podejrzeć tylko te dwa rejestry, np.:
 
 :reg +
 :reg *
-
 # 5. Bonus: szybki dostęp do schowka systemowego
 
 Jeśli chcesz zsynchronizować Vima z systemowym schowkiem na stałe:
