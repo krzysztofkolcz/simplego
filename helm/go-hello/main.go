@@ -11,7 +11,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = "go-hello"
 	}
-	fmt.Fprintf(w, "Hello from %s!\n", name)
+	fmt.Fprintf(w, "Hello from %s! v0.1.0\n", name)
 }
 
 func main() {

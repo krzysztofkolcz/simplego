@@ -146,7 +146,8 @@ build-image:
 
 # 2
 tag-image:
-	docker tag $(TAG) k3d-$(REGISTRY_NAME):$(REGISTRY_PORT)/$(TAG)
+	docker tag $(TAG) localhost:$(REGISTRY_PORT)/$(TAG)
+	docker tag $(TAG) $(REGISTRY_NAME):$(REGISTRY_PORT)/$(TAG)
 ```
 
 
@@ -226,7 +227,96 @@ go-hello/
     _helpers.tpl
 ```
 
+### Warto usuwać zbędne rzeczy.
+
+https://chatgpt.com/c/69791d1b-3608-832b-b24f-97d6499c5a8c
+
 Usuniemy zbędne rzeczy i zostawimy minimalny chart.
+Chart ma opisywać to, co faktycznie deployujesz – nie wszystko, co Helm potrafi.
+Czyli:
+❌ nie zostawiamy „bo może się przyda”
+✅ zostawiamy tylko to, co realnie używane
+📉 im mniejszy chart → mniej błędów → łatwiejsze utrzymanie
+
+### Co robi helm create w praktyce?
+helm create generuje demo-chart:
+pod wszystkie możliwe use-case’y
+edukacyjny
+nie produkcyjny
+Dlatego masz tam m.in.:
+ingress.yaml
+hpa.yaml
+serviceaccount.yaml
+tests/
+masę opcji w values.yaml
+
+Większość projektów używa 20–30% tego, co tam jest.
+
+Na razie usuwam
+./go-hello/templates/hpa.yaml
+./go-hello/templates/NOTES.txt
+
+### Co zdecydowanie warto usuwać, jeśli nie używasz
+❌ templates/
+Usuń bez żalu, jeśli nie korzystasz:
+templates/hpa.yaml
+→ jeśli nie masz HPA
+templates/ingress.yaml
+→ jeśli ingress masz poza chartem albo innym tool’em
+templates/serviceaccount.yaml
+→ jeśli używasz default SA
+templates/tests/*
+→ jeśli nie robisz helm testów
+templates/NOTES.txt
+→ jeśli nikt tego nie czyta (99% zespołów)
+
+❌ values.yaml
+
+To jest największy anty-pattern:
+
+autoscaling:
+  enabled: false
+
+
+Jeśli nie planujesz autoscalingu → usuń całą sekcję.
+Dlaczego?
+ktoś kiedyś ustawi enabled: true
+HPA się stworzy
+prod zacznie żyć własnym życiem 😬
+
+Co zostawić zawsze (core)
+
+Minimum sensownego chartu:
+
+Chart.yaml
+values.yaml
+templates/
+  deployment.yaml
+  service.yaml
+  _helpers.tpl
+
+
+To jest solidny fundament 90% aplikacji backendowych.
+
+Kiedy warto coś zostawić „na przyszłość”?
+
+Tylko jeśli:
+
+masz konkretny plan (np. HPA w Q2)
+
+i komentarz dlaczego jest wyłączone
+
+Przykład OK:
+
+# Planned: enable HPA after load tests (Q2 2026)
+autoscaling:
+  enabled: false
+
+
+Przykład ❌:
+
+autoscaling:
+  enabled: false
 
 ---
 
@@ -238,7 +328,8 @@ Usuniemy zbędne rzeczy i zostawimy minimalny chart.
 replicaCount: 1
 
 image:
-  repository: kkolcz/go-hello
+  # repository: kkolcz/go-hello
+  repository: go-hello-registry:5000/kkolcz/go-hello
   pullPolicy: IfNotPresent
   tag: "0.1.0"
 
@@ -254,7 +345,32 @@ app:
 ```
 
 ### `templates/deployment.yaml` — minimalny deployment
+To świadomo odchudzona wersja deployment.yaml.
+Usuwam (z pomocą chata) niepotrzebne części:
 
+#### Co dokładnie wyciąłeś (świadomie)?
+Element	Dlaczego out
+autoscaling	nie potrzebujesz na start
+serviceAccount	default wystarcza
+securityContext	Go app + non-root później
+liveness/readiness	dodaje się, gdy endpointy gotowe
+resources	brak limitów = mniej throttlingu na dev
+volumes	config przez ENV
+affinity/tolerations	overkill
+imagePullSecrets	local / public registry
+
+Najlepsza strategia (i dokładnie to, co zrobiłeś):
+Start: minimalny Deployment
+A potem dokładać elementy świadomie, gdy:
+wiesz po co
+
+Przykład:
+„pody giną” → livenessProbe
+„OOMKilled” → resources
+„multi-AZ” → affinity
+„sekrety” → volumes + secrets
+
+#### deployment
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -708,3 +824,175 @@ Aktualny kontekst zwroci:
 ```
 kubectl config current-context
 ```
+
+
+# Postgresql działający tutorial
+https://chatgpt.com/c/69749b70-6264-832a-add3-52d079e4dc6b
+
+Poniżej masz praktyczny tutorial krok-po-kroku, oparty o Helm + chart Bitnami, który jest najczęściej używany w produkcji i devie.
+
+Zakładam, że:
+masz działający klaster Kubernetes
+masz zainstalowane: kubectl i helm
+pracujesz lokalnie (np. minikube / k3s / DOKS / EKS)
+Tutorial: PostgreSQL w Kubernetes + baza danych + użytkownik
+
+## 1. Sprawdź wersje
+kubectl version --client
+helm version
+
+## 2. Utwórz namespace (zalecane)
+kubectl create namespace database
+
+## 3. Dodaj repozytorium Helm Bitnami
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo update
+
+## 4. Przygotuj plik values.yaml
+
+Utwórz plik postgresql/values.yaml:
+(architektonicznie, lepiej nie łączyć plików values.yaml i postgresql-values.yaml)
+values.yaml - values dla chartu aplikacji
+
+POPRAWNE PODEJŚCIE #1 (najlepsze): osobne charty + osobne values
+Struktura repo
+
+```
+helm/
+├── go-hello/
+│   ├── Chart.yaml
+│   ├── values.yaml
+│   └── templates/
+│
+└── postgresql/
+    └── values.yaml
+```
+
+postgresql/values.yaml:
+```
+auth:
+  username: appuser
+  password: strongpassword
+  database: appdb
+  postgresPassword: superadminpassword
+
+primary:
+  persistence:
+    enabled: true
+    size: 10Gi
+
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 250m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+```
+
+Co tu się dzieje?
+✔ tworzony jest użytkownik appuser
+✔ tworzona jest baza appdb
+✔ hasło dla roota (postgres)
+✔ PersistentVolume (dane nie znikną po restarcie)
+
+## 5. Zainstaluj PostgreSQL
+helm install postgresql bitnami/postgresql \
+  -n database \
+  -f postgresql/values.yaml
+
+Sprawdź status:
+kubectl get pods -n database
+
+Powinno być:
+postgresql-0   1/1   Running
+
+## 6. Sprawdź, czy baza i użytkownik istnieją
+### 6.1 Pobierz hasło (jeśli nie użyłeś własnego)
+
+Jeśli nie podałeś haseł w values.yaml, możesz je pobrać:
+
+kubectl get secret postgresql -n database \
+  -o jsonpath="{.data.postgres-password}" | base64 -d
+
+### 6.2 Wejdź do kontenera PostgreSQL
+kubectl exec -it postgresql-0 -n database -- psql \
+  -U appuser \
+  -d appdb
+
+### 6.3 Sprawdź bazę i użytkownika
+\du
+\l
+
+Powinieneś zobaczyć:
+użytkownika appuser
+bazę appdb
+
+## 7. Połączenie z PostgreSQL z aplikacji
+### 7.1 Service w Kubernetes
+
+Bitnami tworzy Service:
+
+kubectl get svc -n database
+
+
+Zwykle:
+
+postgresql   ClusterIP   10.x.x.x   5432/TCP
+
+### 7.2 Connection string (z wnętrza klastra)
+postgresql://appuser:strongpassword@postgresql.database.svc.cluster.local:5432/appdb
+
+## 8. Połączenie lokalne (port-forward)
+kubectl port-forward svc/postgresql 5434:5432 -n database
+
+
+Połącz się lokalnie:
+
+psql -h 127.0.0.1 -p 5434 -U appuser -d appdb
+
+## 9. Dodanie dodatkowej bazy / użytkownika (opcjonalnie)
+
+Jeśli chcesz więcej baz:
+
+kubectl exec -it postgresql-0 -n database -- psql -U postgres
+
+CREATE DATABASE otherdb;
+CREATE USER otheruser WITH PASSWORD 'pass123';
+GRANT ALL PRIVILEGES ON DATABASE otherdb TO otheruser;
+
+## 10. Usunięcie PostgreSQL (uwaga na dane!)
+helm uninstall postgresql -n database
+
+⚠️ PV zostaje – dane nadal są na dysku
+Aby usunąć wszystko:
+
+kubectl delete pvc -n database --all
+
+## 11. Struktura „produkcyjna” (rekomendacja)
+
+hasła → Kubernetes Secrets
+
+values.yaml → bez haseł
+
+backup → pg_dump + CronJob
+
+produkcja → managed PostgreSQL (DO, AWS, GCP)
+
+
+# Sealed Secret
+W klastrze działa controller Sealed Secrets
+Ma on klucz prywatny, którego nie ma nikt poza klastrem
+Ty lokalnie:
+bierzesz Secret
+szyfrujesz go narzędziem kubeseal
+Do Gita trafia SealedSecret (zaszyfrowany YAML)
+Controller w klastrze:
+odszyfrowuje go
+tworzy normalny Secret
+📌 Nawet jeśli ktoś ukradnie repo — nie odczyta sekretów
+
+
+# K9s
+## Ubuntu
+curl -sS https://webinstall.dev/k9s | bash

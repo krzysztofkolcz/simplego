@@ -2,7 +2,7 @@ package multicursor
 
 import (
 	"fmt"
-	"log"
+	// "log"
 )
 
 type typeA string
@@ -11,32 +11,49 @@ type typeC string
 type typeD string
 type typeE string
 
-func (a typeA) doSomethingElse() {}
-func (a typeB) doSomethingElse() {}
-func (a typeC) doSomethingElse() {}
-func (a typeD) doSomethingElse() {}
-func (a typeE) doSomethingElse() {}
+type typeX struct{
+	a typeA
+	b typeB
+	c typeC
+	d typeD
+	e typeE
+
+}
+
+func (a typeA) doSomething() {}
+func (a typeB) doSomething() {}
+func (a typeC) doSomething() {}
+func (a typeD) doSomething() {}
+func (a typeE) doSomething() {}
 
 func main() {
-	resultH, n, o, p, q := newH()
-	resultH.doSomethingElse()
-	n.doSomethingElse()
-	log.Println()
-	o.doSomethingElse()
-	log.Println()
-	p.doSomethingElse()
-	log.Println()
-	q.doSomethingElse()
-	log.Println()
+	ee, aa, bb, cc, dd := newH()
+	ee.doSomething()
+	aa.doSomething()
+	fmt.Println()
+	bb.doSomething()
+	fmt.Println()
+	cc.doSomething()
+	fmt.Println()
+	dd.doSomething()
+	fmt.Println()
 
-	fmt.Println(resultH, n, o, p, q)
+	fmt.Println(ee, aa, bb, cc, dd)
+	resultX := typeX{
+		a: ee,
+		b: aa,
+		c: bb,
+		d: cc,
+		e: dd,
+	}
+	fmt.Println(resultX)
 }
 
 func newH() (typeA, typeB, typeC, typeD, typeE) {
-	var resultH typeA = "helllo resultH"
+	var p typeA = "helllo p"
 	var y typeB = "helllo B"
 	var z typeC = "helllo C"
 	var k typeD = "helllo D"
 	var l typeE = "helllo E"
-	return resultH, y, z, k, l
+	return p, y, z, k, l
 }

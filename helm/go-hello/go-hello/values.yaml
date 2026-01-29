@@ -1,9 +1,10 @@
 replicaCount: 1
 
 image:
-  repository: kkolcz/go-hello
+  # repository: kkolcz/go-hello
+  repository: go-hello-registry:5000/kkolcz/go-hello
   pullPolicy: IfNotPresent
-  tag: "0.1.0"
+  tag: "0.1.1"
 
 service:
   type: ClusterIP

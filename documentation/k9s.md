@@ -2,8 +2,6 @@ https://chatgpt.com/c/690494d1-13fc-8326-8e02-e55b2f6b5371
 
 brew install derailed/k9s/k9s
 
-Świetnie — k9s to super szybkie, terminalowe UI do podglądu i działania na klastrze Kubernetes. Poniżej masz praktyczny, krok‑po‑kroku przewodnik (po polsku) z najważniejszymi skrótami, przykładami i porównaniem do kubectl. Gdy użyjesz k9s po raz pierwszy, naciśnij ? w aplikacji — pokaże aktualne skróty i kontekst (to się różni lekko między wersjami/konfiguracjami). Źródła przywołane na końcu.
-
 1) Instalacja i start
 
 Instalacja (przykładowo macOS/Homebrew):

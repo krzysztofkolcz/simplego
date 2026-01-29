@@ -1,0 +1,17 @@
+replicaCount: 1
+
+image:
+  repository: go-hello-registry:5000/kkolcz/my-go-rest-foundation
+  pullPolicy: IfNotPresent
+  tag: "0.1.0"
+
+service:
+  type: ClusterIP
+  port: 80
+
+app:
+  env:
+    - name: APP_ENV
+      value: "dev"
+    - name: HTTP_PORT
+      value: "8080"
