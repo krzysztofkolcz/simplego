@@ -10,11 +10,11 @@ import (
 )
 
 type UserHandlers struct {
-	Users domain.UserService
+	UserService *domain.UserService
 }
 
-func NewUserHandlers(users domain.UserService) *UserHandlers {
-	return &UserHandlers{Users: users}
+func NewUserHandlers(userService *domain.UserService) *UserHandlers {
+	return &UserHandlers{UserService: userService}
 }
 
 type CreateUserRequest struct {
