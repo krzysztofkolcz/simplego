@@ -42,3 +42,13 @@ internal/
 │           ├── get_user.go
 │           └── list_users.go
 ```
+Jak rozumiem, przenoszę /users/create_user.go do users/commands/create_user.go
+Zmieniam nazwę na CreateUserCommand i zwracam jedynie error?
+
+Jak rozumiem przenoszę users/get_user.go do user/queries/get_user.go itd.?
+
+## Commands
+NIE zwraca danych
+tylko sukces / błąd
+zapisuje stan
+

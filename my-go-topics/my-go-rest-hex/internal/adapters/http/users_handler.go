@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/krzysztofkolcz/my-go-rest-hex/internal/application/users"
+	"github.com/go-chi/chi/v5"
+	userscommands "github.com/krzysztofkolcz/my-go-rest-hex/internal/application/users/commands"
+	usersqueries "github.com/krzysztofkolcz/my-go-rest-hex/internal/application/users/queries"
 )
 
 type UserHandlers struct {
-	CreateUser *users.CreateUser
+	CreateUser *userscommands.CreateUserHandler
+	GetUser *usersqueries.GetUserHandler
 }
 
 func (h *UserHandlers) Create(w http.ResponseWriter, r *http.Request) {
@@ -21,7 +24,7 @@ func (h *UserHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.CreateUser.Execute(users.CreateUserInput{
+	err := h.CreateUser.Handle(userscommands.CreateUserCommand{
 		Email: req.Email,
 	})
 
@@ -31,4 +34,19 @@ func (h *UserHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, user)
+}
+
+func (h *UserHandlers) Get(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	view, err := h.GetUser.Handle(usersqueries.GetUserQuery{
+		ID: id,
+	})
+
+	if err != nil {
+		mapError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, view)
 }
