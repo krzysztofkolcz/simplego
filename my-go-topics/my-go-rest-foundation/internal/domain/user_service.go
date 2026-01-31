@@ -1,54 +1,38 @@
 package domain
 
-type UserService interface {
-	List() []User
-	GetByID(id string) (*User, error)
-	Create(email string) (*User, error)
+type UserService struct {
+	repo UserRepository
 }
 
-type InMemoryUserService struct {
-	users []User
+func NewUserService(repo UserRepository) *UserService {
+	return &UserService{repo: repo}
 }
 
-func NewInMemoryUserService() *InMemoryUserService {
-	return &InMemoryUserService{
-		users: []User{
-			{ID: "1", Email: "john@example.com"},
-			{ID: "2", Email: "kate@example.com"},
-		},
-	}
+func (s *UserService) GetByID(id string) (*User, error) {
+	return s.repo.GetByID(id)
 }
 
-
-func (s *InMemoryUserService) List() []User {
-	return s.users
+func (s *UserService) List() ([]User, error) {
+	return s.repo.List()
 }
 
-func (s *InMemoryUserService) GetByID(id string) (*User, error) {
-	for _, u := range s.users {
-		if u.ID == id {
-			return &u, nil
-		}
-	}
-	return nil, ErrUserNotFound
-}
-
-func (s *InMemoryUserService) Create(email string) (*User, error) {
+func (s *UserService) Create(email string) (*User, error) {
 	if email == "" {
 		return nil, ErrInvalidEmail
 	}
 
-	for _, u := range s.users {
-		if u.Email == email {
-			return nil, ErrUserExists
-		}
+	if _, err := s.repo.GetByEmail(email); err == nil {
+		return nil, ErrUserExists
 	}
 
 	user := User{
-		ID:    string(rune(len(s.users) + 1)),
+		ID:    generateID(), // helper
 		Email: email,
 	}
 
-	s.users = append(s.users, user)
+	if err := s.repo.Save(user); err != nil {
+		return nil, err
+	}
+
 	return &user, nil
 }
