@@ -1,11 +1,17 @@
 package domain
 
-type UserService struct {
+type UserService interface {
+	List() []User
+	GetByID(id string) (*User, error)
+	Create(email string) (*User, error)
+}
+
+type InMemoryUserService struct {
 	users []User
 }
 
-func NewUserService() *UserService {
-	return &UserService{
+func NewInMemoryUserService() *InMemoryUserService {
+	return &InMemoryUserService{
 		users: []User{
 			{ID: "1", Email: "john@example.com"},
 			{ID: "2", Email: "kate@example.com"},
@@ -13,11 +19,12 @@ func NewUserService() *UserService {
 	}
 }
 
-func (s *UserService) List() []User {
+
+func (s *InMemoryUserService) List() []User {
 	return s.users
 }
 
-func (s *UserService) GetByID(id string) (*User, error) {
+func (s *InMemoryUserService) GetByID(id string) (*User, error) {
 	for _, u := range s.users {
 		if u.ID == id {
 			return &u, nil
@@ -26,7 +33,7 @@ func (s *UserService) GetByID(id string) (*User, error) {
 	return nil, ErrUserNotFound
 }
 
-func (s *UserService) Create(email string) (*User, error) {
+func (s *InMemoryUserService) Create(email string) (*User, error) {
 	if email == "" {
 		return nil, ErrInvalidEmail
 	}
