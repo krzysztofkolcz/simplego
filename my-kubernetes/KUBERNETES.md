@@ -115,7 +115,7 @@ contexts:
     cluster: k3d-go-hello
     user: admin
     namespace: default
-
+```
 
 👉 Twoje lokalne playground / dev
 
@@ -205,3 +205,53 @@ KUBECONFIG=plik1:plik2 → merge kubeconfigów
 ~/.kube/kubeconfig-garden → firmowe / prod
 razem → pełna lista klastrów
 kubectx działa jak marzenie 💙
+
+
+# zmiany klastrow
+ustawienie KUBECONFIG w shelu
+
+# fzf
+sudo apt install fzf
+# kubectx
+# kubens
+# kube-ps1
+cd ~
+git clone https://github.com/jonmosco/kube-ps1.git ~/.kube-ps1
+
+Załaduj kube-ps1 w powłoce
+📌 dla bash
+Dodaj do pliku ~/.bashrc:
+
+```
+# kube-ps1
+source "$HOME/.kube-ps1/kube-ps1.sh"
+# przykładowy prompt z kontekstem i namespace
+PS1='[\u@\h \W $(kube_ps1)]\$ '
+```
+
+# k9s
+:
+namespaces
+deployments
+ctx
+svc
+
+edit -> e (or i?)
+select pod -> l
+
+# popeye - TODO
+https://github.com/derailed/popeye
+
+# stern - TODO
+kolorowanie logów
+
+# ~/.bashrc
+```
+# ps1
+source "$HOME/.kube-ps1/kube-ps1.sh"
+PS1='[\u@\h \W $(kube_ps1)]\$ '
+    
+alias k=kubectl
+alias kx=kubectx
+alias kn=kubens
+```

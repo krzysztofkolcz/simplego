@@ -6,7 +6,8 @@ import (
 	"os"
 	"time"
 
-	apphttp "github.com/krzysztofkolcz/my-go-rest-foundation-002/internal/http"
+	app "github.com/krzysztofkolcz/my-go-rest-foundation/internal"
+	apphttp "github.com/krzysztofkolcz/my-go-rest-foundation/internal/http"
 	slogctx "github.com/veqryn/slog-context"
 )
 
@@ -17,7 +18,10 @@ func main() {
 		}),
 	)
 
-	router := apphttp.NewRouter()
+	application := app.New()
+	router := apphttp.NewRouter(application)
+
+
 	handler := loggingMiddleware(logger)(router)
 
 	logger.Info("server started", "port", 8080)
