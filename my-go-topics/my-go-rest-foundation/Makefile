@@ -1,5 +1,6 @@
 
-VERSION=0.1.0
+# Upgrade
+VERSION=0.1.4
 IMAGE=kkolcz/my-go-rest-foundation
 TAG=$(IMAGE):$(VERSION)
 RELEASE=my-go-rest-foundation-release
