@@ -1,6 +1,12 @@
 package users
 
-import "github.com/krzysztofkolcz/my-go-rest-hex/internal/domain"
+import (
+	"time"
+
+	"github.com/krzysztofkolcz/my-go-rest-hex/internal/domain"
+	"github.com/krzysztofkolcz/my-go-rest-hex/internal/domain/events"
+	eventhandler "github.com/krzysztofkolcz/my-go-rest-hex/internal/events"
+)
 
 // type CreateUser struct {
 // 	Users domain.UserRepository
@@ -75,6 +81,7 @@ type CreateUserCommand struct {
 
 type CreateUserHandler struct {
 	Users domain.UserRepository
+	Bus   *eventhandler.EventBus
 }
 
 func (h *CreateUserHandler) Handle(cmd CreateUserCommand) error {
@@ -87,5 +94,15 @@ func (h *CreateUserHandler) Handle(cmd CreateUserCommand) error {
 		return err
 	}
 
-	return h.Users.Save(user)
+	if err := h.Users.Save(user); err != nil {
+		return err
+	}
+
+	event := events.UserCreated{
+		UserID: user.ID,
+		Email:  user.Email,
+		At:     time.Now(),
+	}
+
+	return h.Bus.PublishUserCreated(event)
 }
