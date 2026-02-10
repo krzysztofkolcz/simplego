@@ -60,7 +60,7 @@ wait-for-pod:
 # Helm install
 ####
 # Start 
-TAG=kkolcz/go-hello:0.1.0
+TAG=kkolcz/go-hello:0.1.3
 RELEASE=demo
 CHART_DIR=./go-hello
 # 1
@@ -98,18 +98,29 @@ k3d-dry-run:
 # k3d-build-helm:
 # 	helm dependency build ./charts
 
-VERSION=0.1.1
+VERSION=0.1.3
 IMAGE=kkolcz/go-hello
 HOST_REGISTRY=localhost:5000
 # Musze tak otagować - registry z hosta dostępne pod localhost
 CLUSTER_REGISTRY=go-hello-registry:5000
 # Musze tak otagować - registry z klastra dostępne pod tym tagiem. Ustawione w values.yaml
 
+k3d-push:
+	docker build -t $(IMAGE):$(VERSION) .
+	docker tag $(IMAGE):$(VERSION) $(HOST_REGISTRY)/$(IMAGE):$(VERSION)
+	docker tag $(IMAGE):$(VERSION) $(CLUSTER_REGISTRY)/$(IMAGE):$(VERSION)
+	docker push $(HOST_REGISTRY)/$(IMAGE):$(VERSION)
+
 k3d-upgrade-helm:
 	docker build -t $(IMAGE):$(VERSION) .
 	docker tag $(IMAGE):$(VERSION) $(HOST_REGISTRY)/$(IMAGE):$(VERSION)
 	docker tag $(IMAGE):$(VERSION) $(CLUSTER_REGISTRY)/$(IMAGE):$(VERSION)
 	docker push $(HOST_REGISTRY)/$(IMAGE):$(VERSION)
+	helm upgrade --install $(RELEASE) ./go-hello \
+	  -n go-hello-ns \
+	  -f ./go-hello/values.yaml
+
+k3d-upgrade-helm-without-docker:
 	helm upgrade --install $(RELEASE) ./go-hello \
 	  -n go-hello-ns \
 	  -f ./go-hello/values.yaml
@@ -130,3 +141,33 @@ psql2-install-psql:
 	helm install postgresql bitnami/postgresql \
 	-n $(NAMESPACE) \
 	-f postgresql/values.yaml
+
+####
+# Sealed secret
+####
+sealed-create-ns:
+	kubectl create namespace sealed-secrets
+
+sealed-add-repo:
+	helm repo add sealed-secrets https://bitnami-labs.github.io/sealed-secrets
+	helm repo update
+
+sealed-install:
+	helm install sealed-secrets sealed-secrets/sealed-secrets \
+	-n sealed-secrets
+
+sealed-test:
+	kubectl get pods -n sealed-secrets
+
+sealed-create-ns-database:
+	kubectl create namespace database
+
+# Tworzy plik ./go-hello/templates/sealedsecret-postgres.yaml
+# musi istniec ./postgresql/postgres-secret.yaml - w nim definiuje namespace 
+sealed-generate:
+	kubeseal \
+	--controller-name sealed-secrets \
+	--controller-namespace sealed-secrets \
+	--format yaml \
+	< ./postgresql/postgres-secret.yaml \
+	> ./go-hello/templates/sealedsecret-postgres.yaml

@@ -1,0 +1,7 @@
+apiVersion: v2
+name: go-hello
+description: Base Helm chart for Go learning projects
+type: application
+
+version: 0.1.1
+appVersion: "1.0.0"

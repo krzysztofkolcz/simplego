@@ -1,0 +1,7 @@
+Go Hello deployed!
+
+Check status:
+  kubectl get pods -l app=go-hello
+
+Port forward:
+  kubectl port-forward svc/{{ include "go-hello.fullname" . }} 8080:8080

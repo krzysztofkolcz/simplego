@@ -992,6 +992,19 @@ odszyfrowuje go
 tworzy normalny Secret
 📌 Nawet jeśli ktoś ukradnie repo — nie odczyta sekretów
 
+## Create secret
+
+```
+kubectl create secret generic db-secret \
+  --from-literal=DB_PASSWORD=supersecret \
+  --dry-run=client -o yaml > secret.yaml
+```
+## seal secret
+```
+kubeseal \
+  --controller-namespace kube-system \
+  --format yaml < secret.yaml > sealed-secret.yaml
+```
 
 # K9s
 ## Ubuntu

@@ -1,6 +1,27 @@
 # Organization
 DZIENNIK.md - dziennik aktywności
 
+## 2 podejścia:
+### Każdy temat osobno, minimalny deployment, za to ogarniam inne tematy
+my-helm/
+    01-basic-deploy
+    02-config-secret
+
+### Wszystkie tematy razem
+helm/
+    go-hello
+    ...
+    TUTORIAL.md - w tutorialu każdy temat opisany osobno.
+
+### Ćwiczenia - usuwam
+helm/
+    go-hello-exercise
+
+lub
+
+my-helm/
+    01-basic-deploy-exercise
+
 # Go topics
 https://www.youtube.com/watch?v=wr8gJMj3ODw
 
@@ -59,8 +80,3 @@ K9s
 Simple programs:
 Creating folders
 Processing nef to jpeg with go routines
-
-
-
-7 listopada
-11 listopada wolny - 10 listopada zrobić request
