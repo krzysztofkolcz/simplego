@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "go-hello.fullname" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "go-hello.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "go-hello.name" . }}
+    spec:
+      containers:
+        - name: app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.port }}
+          envFrom:
+          - configMapRef:
+              name: {{ include "go-hello.fullname" . }}-config
+          - secretRef:
+              name: {{ include "go-hello.fullname" . }}-secret
+          # pierwsza wersja - zmiana na envFrom
+          # env:
+          #   {{- range $key, $value := .Values.env }}
+          #   - name: {{ $key }}
+          #     value: "{{ $value }}"
+          #   {{- end }}

@@ -1,0 +1,23 @@
+replicaCount: 1
+
+image:
+  repository: go-hello-registry:5000/kkolcz/go-hello
+  tag: 0.1.0
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources: {}
+
+env:
+  APP_NAME: go-hello-yo
+  LOG_LEVEL: debug
+
+config:
+  APP_ENV: local
+  FEATURE_X_ENABLED: "true"
+
+secret:
+  DB_PASSWORD: supersecret

@@ -11,7 +11,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = "go-hello"
 	}
-	fmt.Fprintf(w, "Hello from %s! v0.1.0\n", name)
+	dbname := os.Getenv("DB_NAME")
+	dbpass := os.Getenv("DB_PASS")
+	fmt.Fprintf(w, "X Hello from %s! v0.1.2\n DB_NAME: %s, DB_PASS: %s", name, dbname, dbpass)
 }
 
 func main() {

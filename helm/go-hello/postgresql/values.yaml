@@ -1,8 +1,9 @@
-auth:
-  username: appuser
-  password: strongpassword
-  database: appdb
-  postgresPassword: superadminpassword
+# removing this section, and moving passwords to ./go-hello/templates/sealedsecret-postgres.yaml
+# auth:
+#   username: 
+#   password: 
+#   database: 
+#   postgresPassword: 
 
 primary:
   persistence:

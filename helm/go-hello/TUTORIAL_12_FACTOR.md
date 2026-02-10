@@ -1,3 +1,4 @@
+https://chatgpt.com/g/g-p-6979069f038081918633e25bb9943f89-nauka-golanga/c/69749b70-6264-832a-add3-52d079e4dc6b
 ## Moje pytanie
 Co znaczy 12-factor config (ENV + Secrets)?
 Chciałbym, żeby to wyglądało tak:
