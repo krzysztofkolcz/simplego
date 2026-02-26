@@ -1,0 +1,462 @@
+openapi: 3.0.3
+
+info:
+  title: Users API
+  version: 1.0.0
+servers:
+  - url: "{scheme}://{host}/myhttpserver/v1/{tenant}"
+    description: API server
+    variables:
+      scheme:
+        default: http
+        enum:
+          - http
+          - https
+      host:
+        default: "localhost:8080"
+      tenant:
+        default: "default"
+        description: The tenant ID for the API request. This is a required parameter.
+
+# Global security 
+# security:
+  # - bearerAuth: []
+
+paths:
+  /users:
+    get:
+      summary: List users
+      security: []   # public endpoint
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: email
+          in: query
+          required: false
+          schema:
+            type: string
+            format: email
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - email
+              - -email
+              - createdAt
+              - -createdAt
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserListResponse"
+        "404":
+          $ref: "#/components/responses/404"
+        "500":
+          $ref: "#/components/responses/500"
+    post:
+      security: []   # 👈 public endpoint
+      summary: Create user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/400"
+        "409":
+          $ref: "#/components/responses/409"
+  /users/{id}:
+    get:
+      security: []   # 👈 public endpoint
+      summary: Get user by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          $ref: "#/components/responses/404"
+    patch:
+      security: []   # public endpoint
+      summary: Update user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/400"
+        "404":
+          $ref: "#/components/responses/404"
+    delete:
+      security: []   # public endpoint
+      summary: Delete user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Deleted
+  /auth/login:
+    post:
+      summary: Login
+      security: []   # public endpoint
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: OK
+        "404":
+          $ref: "#/components/responses/404"
+        "500":
+          $ref: "#/components/responses/500"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      required: [id, email]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+
+    CreateUserRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+
+    UserListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        total:
+          type: integer
+
+    CursorListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        nextCursor:
+          type: string
+          nullable: true
+    
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    LoginResponse:
+      type: object
+      required: [accessToken]
+      properties:
+        accessToken:
+          type: string
+
+    #
+    # Error
+    #
+    DetailedError:
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/Error"
+        - type: object
+          required:
+            - status
+          properties:
+            status:
+              description: HTTP status code
+              type: integer
+            requestID:
+              description: The unique identifier of the request
+              example: 11111111-1111-1111-1111-111111111111
+              type: string
+            target:
+              description: The object that the api_errors relates to
+              type: string
+              example: >-
+                "https://api.technicarium.com/version/obiect/11111111-1111-1111-1111-111111111111"
+            details:
+              type: array
+              items:
+                $ref: "#/components/schemas/Error"
+            moreInfo:
+              type: array
+              items:
+                type: string
+                description: Links that contain more information about the api_errors
+                example: https://help.example.com
+    Error:
+      description: A structured api_errors response
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          description:
+            Technical code of the api_errors, used to identify the api_errors condition. This value is stable and
+            can be used to handle specific api_errors cases.
+          type: string
+          example: UNKNOWN_ERROR
+        message:
+          description:
+            Human readable message describing the reason and context of the api_errors, as well as possible
+            instructions to resolve it. This value is subject to changes over time and must not be used to handle code
+            logic decisions.
+          type: string
+          example: The request cannot be processed
+        context:
+          description: Additional context of the api_errors
+          type: object
+    ErrorMessage:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          $ref: "#/components/schemas/DetailedError"
+
+  responses:
+    "400":
+      description: Bad request 
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorMessage"
+          examples:
+            response:
+              value:
+                error:
+                  status: 400
+                  code: BAD_REQUEST
+                  message: Request body not compliant with specification
+                  id: 11111111-1111-1111-1111-111111111111
+    "401":
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorMessage"
+    "403":
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorMessage"
+          examples:
+            response:
+              value:
+                error:
+                  status: 403
+                  code: UNAUTHORIZED
+                  message: Request body not compliant with specification
+                  id: 11111111-1111-1111-1111-111111111111
+    "404":
+      description: >-
+        The 404 (Not Found) 
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorMessage"
+          examples:
+            response:
+              value:
+                error:
+                  status: 404
+                  code: NOT_FOUND
+                  message: Resource not found
+                  id: 11111111-1111-1111-1111-111111111111
+    "405":
+      description: >-
+        The 405 (Not Allowed) 
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorMessage"
+          examples:
+            response:
+              value:
+                error:
+                  status: 405
+                  code: METHOD_NOT_ALLOWED
+                  message: HTTP Method not allowed 
+                  id: 11111111-1111-1111-1111-111111111111
+    "406":
+      description: |
+        406 (Not Acceptable) HTTP status code.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorMessage"
+    "408":
+      description: >-
+        408 (Request Timeout) 
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorMessage"
+          examples:
+            response:
+              value:
+                error:
+                  status: 408
+                  code: REQUEST_TIMEOUT
+                  message: Request timeout
+                  id: 11111111-1111-1111-1111-111111111111
+    "409":
+      description: >-
+        The 409 (Conflict) 
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorMessage"
+          examples:
+            response:
+              value:
+                error:
+                  status: 409
+                  code: CONFLICT
+                  message: The requested resource is in an invalid state
+                  id: 11111111-1111-1111-1111-111111111111
+    "412":
+      description: >-
+        The 412 (Precondition Failed) 
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorMessage"
+    "413":
+      description: >-
+        The 413 (Content Too Large)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorMessage"
+    "429":
+      description: >-
+        The 429 (Too Many Requests) 
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorMessage"
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Indicates how long (in seconds) the client should wait before retrying the request.
+
+
+    "500":
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorMessage"
+          examples:
+            response:
+              value:
+                error:
+                  status: 500
+                  code: INTERNAL_SERVER_ERROR
+                  message: Internal server error
+                  id: 11111111-1111-1111-1111-111111111111
