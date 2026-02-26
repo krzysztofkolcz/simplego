@@ -1,0 +1,7 @@
+logger:
+  level: debug
+  format: json
+
+http:
+  address: :6789
+  shutdownTimeout: 10s

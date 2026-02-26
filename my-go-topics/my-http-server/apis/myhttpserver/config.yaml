@@ -1,0 +1,9 @@
+package: myhttpserver
+output: ./internal/api/myhttpserver/myhttpserverapi.go
+generate:
+  models: true
+  std-http-server: true
+  strict-server: true
+  embedded-spec: true
+compatibility:
+  always-prefix-enum-values: true
