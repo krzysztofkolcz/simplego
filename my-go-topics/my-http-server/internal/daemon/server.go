@@ -217,6 +217,8 @@ func createHTTPServer(
 			ErrorHandlerFunc: handlers.ParamsErrorHandler(),
 			Middlewares: []myhttpserver.MiddlewareFunc{ // Middlewares are applied from last to first
 				middleware.OAPIMiddleware(swagger),
+				middleware.LoggingMiddleware(),
+				middleware.PanicRecoveryMiddleware(),
 				middleware.InjectRequestID(),
 			},
 		},

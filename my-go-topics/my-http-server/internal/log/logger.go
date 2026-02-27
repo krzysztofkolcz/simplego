@@ -35,18 +35,26 @@ func setLogLevel(levelVar *slog.LevelVar, level string) {
 
 func InitLogger(cfg config.Config) *slog.Logger {
 	setLogLevels(cfg)
-	h := slogctx.NewHandler(
-		slog.NewJSONHandler(
-			os.Stdout,
-			&slog.HandlerOptions{
-				Level: logLevel,
-			},
-		),
-		nil,
+
+	baseHandler := slog.NewJSONHandler(
+		os.Stdout,
+		&slog.HandlerOptions{
+			Level:     logLevel,
+			AddSource: true, // przydatne w dev
+		},
 	)
 
-	logger := slog.New(h)
+	handler := slogctx.NewHandler(
+		baseHandler,
+		&slogctx.HandlerOptions{
+			Prependers: []slogctx.AttrExtractor{
+				slogctx.ExtractPrepended,
+			},
+		},
+	)
 
+	logger := slog.New(handler)
 	slog.SetDefault(logger)
+
 	return logger
 }
