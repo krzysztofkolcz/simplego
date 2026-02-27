@@ -13,6 +13,7 @@ import (
 	"github.com/krzysztofkolcz/my-http-server/internal/config"
 	"github.com/krzysztofkolcz/my-http-server/internal/constants"
 	"github.com/krzysztofkolcz/my-http-server/internal/controllers/myhttpcontroller"
+	"github.com/krzysztofkolcz/my-http-server/internal/errs"
 	"github.com/krzysztofkolcz/my-http-server/internal/handlers"
 	logger "github.com/krzysztofkolcz/my-http-server/internal/log"
 	"github.com/krzysztofkolcz/my-http-server/internal/middleware"
@@ -85,15 +86,19 @@ func (s *MyHttpServer) Start(ctx context.Context) error {
 	return nil
 }
 
+// przygotowuje spec OpenAPI do runtime validation.
 func SetupSwagger() (*openapi3.T, error) {
+	// Ładuje wygenerowany Swagger
 	swagger, err := myhttpserver.GetSwagger()
 	if err != nil {
-		// 	return nil, errs.Wrapf(err, "failed to load swagger file")
+		return nil, errs.Wrapf(err, "failed to load swagger file")
 	}
 	// Instead of setting Servers list to nil, we only remove the host from the URL.
 	// This is because gorilla/mux used by the OAPI validator only allows hosts
 	// without periods '.' in the URL. However, we still want to keep
 	// the rest of the Server URL to allow matching path prefix with parameterised tenants.
+
+	// oapi-codegen + gorilla/mux ma problem z hostami zawierającymi kropki (.) w URL przy walidacji.
 	for _, srv := range swagger.Servers {
 		srv.URL = strings.Replace(srv.URL, "{host}", "", 1)
 	}
@@ -101,6 +106,51 @@ func SetupSwagger() (*openapi3.T, error) {
 	return swagger, nil
 }
 
+/*
+https://chatgpt.com/g/g-p-6979069f038081918633e25bb9943f89-nauka-golanga/c/69a165f1-3778-8329-bd68-f71eedd843ed
+
+Jak przepływa request?
+
+Cały flow:
+
+HTTP Request
+
+	↓
+
+InjectRequestID middleware
+
+	↓
+
+OAPI Request Validator middleware
+
+	↓
+
+Param binding
+
+	↓
+
+Strict JSON decode
+
+	↓
+
+StrictMiddlewareFunc (jeśli są)
+
+	↓
+
+Controller
+
+	↓
+
+Response validation
+
+	↓
+
+ResponseErrorHandler
+
+	↓
+
+write.ErrorResponse
+*/
 func createHTTPServer(
 	cfg *config.Config,
 	ctr *myhttpcontroller.APIController,
@@ -114,6 +164,20 @@ func createHTTPServer(
 	// First middleware to run should be the InjectRequestID
 
 	httpHandler := myhttpserver.HandlerWithOptions(
+		/*
+			myhttpserver.NewStrictHandlerWithOptions
+			Ten middleware działa:
+			po walidacji parametrów
+			po dekodowaniu JSON
+			przed wywołaniem kontrolera
+			operuje na typach wygenerowanych z OpenAPI
+			To middleware "typed".
+			Używa się go do:
+			auth per endpoint
+			per-operation policy
+			biznesowego middleware
+			To jest bliżej controllera.
+		*/
 		myhttpserver.NewStrictHandlerWithOptions(
 			ctr,
 			[]myhttpserver.StrictMiddlewareFunc{},
@@ -122,10 +186,35 @@ func createHTTPServer(
 				ResponseErrorHandlerFunc: handlers.ResponseErrorHandlerFunc(),
 			},
 		),
+		/*
+			myhttpserver.StdHTTPServerOptions
+			To klasyczne func(http.Handler) http.Handler.
+			Działają na poziomie:
+			czystego net/http
+			przed strict handlerem
+			przed dekodowaniem requestu
+			To jest warstwa transportowa.
+			Tutaj robisz:
+			request ID
+			logging
+			OpenAPI validation
+			CORS
+			rate limit
+		*/
 		myhttpserver.StdHTTPServerOptions{
 			BaseURL:    constants.BasePath,
 			BaseRouter: NewServeMux(constants.BasePath),
-			// ErrorHandlerFunc: handlers.ParamsErrorHandler(),
+			/*
+				ParamsErrorHandler
+				Uruchamiany gdy:
+				query param niepoprawny
+				brak required param
+				błędny format
+				Tu jeszcze middleware mogły się nie wykonać.
+				Dlatego robisz ręcznie:
+				ctx := utils.InjectRequestID(r.Context())
+			*/
+			ErrorHandlerFunc: handlers.ParamsErrorHandler(),
 			Middlewares: []myhttpserver.MiddlewareFunc{ // Middlewares are applied from last to first
 				middleware.OAPIMiddleware(swagger),
 				middleware.InjectRequestID(),
