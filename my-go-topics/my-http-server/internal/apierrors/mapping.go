@@ -32,6 +32,22 @@ var apiErrorMapper = APIErrorMapper{
 	PriorityErrors: highPrio,
 }
 
+/*
+Centralne mapowanie błędów
+Najważniejsza część architektury:
+TransformToAPIError(ctx, err)
+To:
+1. sprawdza priority errors
+2. szuka najlepszego dopasowania w error chain
+3. wybiera mapping z największą liczbą dopasowań
+4. buduje myhttpserver.ErrorMessage
+To daje:
+- centralny kontrakt błędów
+- brak wycieku wewnętrznych errorów
+- spójne status code
+- spójne error code
+To jest bardzo clean architecture approach.
+*/
 func TransformToAPIError(ctx context.Context, err error) *myhttpserver.ErrorMessage {
 	e := apiErrorMapper.transform(ctx, err)
 	if e == nil {
