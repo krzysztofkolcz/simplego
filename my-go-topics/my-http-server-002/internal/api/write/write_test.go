@@ -6,9 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/krzysztofkolcz/my-http-server/internal/api/myhttpserver"
-	"github.com/krzysztofkolcz/my-http-server/internal/api/write"
-	mycontext "github.com/krzysztofkolcz/my-http-server/utils"
+	"github.com/krzysztofkolcz/my-http-server-002/internal/api/myhttpserver2"
+	"github.com/krzysztofkolcz/my-http-server-002/internal/api/write"
+	mycontext "github.com/krzysztofkolcz/my-http-server-002/utils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -16,8 +16,8 @@ func TestWriteErrorResponse(t *testing.T) {
 	t.Run("should write error", func(t *testing.T) {
 		ctx := mycontext.InjectRequestID(t.Context())
 		w := httptest.NewRecorder()
-		errorResponse := myhttpserver.ErrorMessage{
-			Error: myhttpserver.DetailedError{
+		errorResponse := myhttpserver2.ErrorMessage{
+			Error: myhttpserver2.DetailedError{
 				Code:    "TEST_ERROR",
 				Message: "This is a test error",
 				Status:  http.StatusBadRequest,
@@ -28,7 +28,7 @@ func TestWriteErrorResponse(t *testing.T) {
 
 		requestID, _ := mycontext.GetRequestID(ctx)
 
-		var errorMessage myhttpserver.ErrorMessage
+		var errorMessage myhttpserver2.ErrorMessage
 		err := json.Unmarshal(w.Body.Bytes(), &errorMessage)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusBadRequest, w.Code)

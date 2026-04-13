@@ -1,0 +1,7 @@
+logger:
+  level: info
+  format: json
+
+http:
+  address: :8080
+  shutdownTimeout: 10s
