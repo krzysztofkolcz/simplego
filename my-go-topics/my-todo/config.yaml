@@ -1,0 +1,8 @@
+logLevel: info
+
+http:
+  address: :8080
+  shutdownTimeout: 10s
+
+database:
+  dsn: "postgres://postgres:postgres@localhost:5432/todos?sslmode=disable"
