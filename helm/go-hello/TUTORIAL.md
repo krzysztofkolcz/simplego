@@ -349,15 +349,15 @@ To świadomo odchudzona wersja deployment.yaml.
 Usuwam (z pomocą chata) niepotrzebne części:
 
 #### Co dokładnie wyciąłeś (świadomie)?
-Element	Dlaczego out
-autoscaling	nie potrzebujesz na start
-serviceAccount	default wystarcza
-securityContext	Go app + non-root później
-liveness/readiness	dodaje się, gdy endpointy gotowe
-resources	brak limitów = mniej throttlingu na dev
-volumes	config przez ENV
+Element	              Dlaczego out
+autoscaling	          nie potrzebujesz na start
+serviceAccount	      default wystarcza
+securityContext	      Go app + non-root później
+liveness/readiness	  dodaje się, gdy endpointy gotowe
+resources	            brak limitów = mniej throttlingu na dev
+volumes	              config przez ENV
 affinity/tolerations	overkill
-imagePullSecrets	local / public registry
+imagePullSecrets	    local / public registry
 
 Najlepsza strategia (i dokładnie to, co zrobiłeś):
 Start: minimalny Deployment
@@ -432,8 +432,8 @@ include = funkcja Helm, która wywołuje definicję helpera z _helpers.tpl
 type: {{ .Values.service.type }}
 ```
 
-.Values → zawartość pliku values.yaml
-.Values.service.type → bierze wartość z:
+.Values -> zawartość pliku values.yaml
+.Values.service.type -> bierze wartość z:
 ```
 service:
   type: ClusterIP

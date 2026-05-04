@@ -93,10 +93,33 @@ spec:
     type: Opaque
 ```
 
-
 ✔ bezpieczne
 ✔ git-friendly
 ✔ 12-factor
+
+## Deploy sealedsecret do klastra - normalnie przez 'helm upgrade'
+helm upgrade --install...
+wrzuci zaszyfrowany sealde
+
+2. 🚀 Deploy przez Helm
+
+Uruchom:
+
+helm upgrade --install rel001 ./charts -n go-migrations-ns
+3. 🔥 Co się stanie pod spodem
+Helm tworzy:
+SealedSecret
+Kontroler Bitnami Sealed Secrets Controller:
+wykrywa SealedSecret
+odszyfrowuje go
+tworzy:
+Secret: postgresql-secret ✅
+🔍 Sprawdź czy działa
+kubectl get sealedsecrets -n go-migrations-ns
+kubectl get secret postgresql-secret -n go-migrations-ns
+
+👉 jeśli secret istnieje → wszystko OK
+
 
 # KROK 5 – PostgreSQL Helm values (POPRAWIONE)
 

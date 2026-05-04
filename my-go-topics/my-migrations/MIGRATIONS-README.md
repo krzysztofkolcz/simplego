@@ -810,3 +810,44 @@ albo:
 👉 sqlc + tenant context + repo (pełny flow request → DB)
 
 To są dwa najważniejsze elementy dalej 👍
+
+
+## hook policy:
+```
+"helm.sh/hook-delete-policy": hook-succeeded
+
+👉 usuwa job po sukcesie
+👉 nie zostawia śmieci
+```
+
+## job log
+```
+kubectl logs job/myapp-migrate
+```
+
+## Flow
+GitHub Actions:
+  1. build
+  2. test (testcontainers + migracje)
+  3. push image
+  4. helm upgrade (→ job migracyjny)
+
+Kubernetes:
+  5. migration job (hook)
+  6. deploy app
+
+### 1. TESTY MIGRACJI W CI (klucz)
+
+👉 tu używasz testcontainers — NIE klastra
+
+co testujesz:
+✔ czy migracje się wykonują
+✔ czy tworzą schematy
+✔ czy można zrobić INSERT
+
+
+### Żeby zrobić migracje, chyba muszę skompilować kod?
+Dodałem migrację 002.init.up.sql do db/tenant, ale nie poszła migracja
+
+# TODO
+Jak powtórzyć migracje które padły? Zapisywać listę tenantów z errorami?

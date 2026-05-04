@@ -12,3 +12,110 @@ integration-test:
 # go test -v ./tests/integration/...        # verbose (print test names)
 # go test -count=1 ./tests/integration/...  # bez cache (ważne przy integracyjnych!)
 # go test -run TestUser ./tests/integration/...  # tylko wybrane testy
+
+
+
+image-list:
+	curl http://localhost:5000/v2/_catalog
+
+tag-list:
+	curl http://localhost:5000/v2/kkolcz/go-hello/tags/list
+
+
+REGISTRY_NAME=go-hello-registry
+REGISTRY_PORT=5000
+
+
+####
+# Helm install
+####
+# Start 
+VERSION=0.0.30
+IMAGE=kkolcz/go-migrations
+HOST_REGISTRY=localhost:5000
+CLUSTER_NAME=go-hello-cluster
+RELEASE=rel001
+DIR=charts
+CHART_DIR=./$(DIR)
+NAMESPACE=go-migrations-ns
+CLUSTER_REGISTRY=go-hello-registry:5000
+
+create-helm-charts:
+	helm create $(DIR)
+
+ns:
+	kubectl create namespace $(NAMESPACE)
+
+k3d-image:
+	docker build -t $(IMAGE):$(VERSION) .
+	docker tag $(IMAGE):$(VERSION) $(HOST_REGISTRY)/$(IMAGE):$(VERSION)
+	docker tag $(IMAGE):$(VERSION) $(CLUSTER_REGISTRY)/$(IMAGE):$(VERSION)
+	docker push $(HOST_REGISTRY)/$(IMAGE):$(VERSION)
+
+k3d-helm-up:
+	helm upgrade --install $(RELEASE) $(CHART_DIR) \
+	  -n $(NAMESPACE) \
+	  -f $(CHART_DIR)/values.yaml \
+	  --wait --timeout 120s --debug
+
+k3d-image-helm-up: k3d-image k3d-helm-up
+	echo "ok"
+
+k3d-template:
+	helm template $(RELEASE) $(CHART_DIR) -f $(CHART_DIR)/values.yaml	
+
+k3d-dry-run:
+	helm install $(RELEASE) $(CHART_DIR) \
+	-f $(CHART_DIR)/values.yaml \
+	--dry-run \
+	--debug
+
+pf:
+	kubectl port-forward svc/rel001-charts 8080:80
+	# kubectl port-forward svc/rel001-go-migrations 8080:80
+
+psql-pf:
+	kubectl port-forward svc/postgresql 5434:5432 -n database
+
+
+####
+# psql-2
+####
+psql2-add-bitnami:
+	helm repo add bitnami https://charts.bitnami.com/bitnami
+	helm repo update
+
+psql2-install-psql:
+	helm install postgresql bitnami/postgresql \
+	-n $(NAMESPACE) \
+	-f postgresql/values.yaml
+
+####
+# Sealed secret
+####
+sealed-create-ns:
+	kubectl create namespace sealed-secrets
+
+sealed-add-repo:
+	helm repo add sealed-secrets https://bitnami-labs.github.io/sealed-secrets
+	helm repo update
+
+sealed-install:
+	helm install sealed-secrets sealed-secrets/sealed-secrets \
+	-n sealed-secrets
+
+sealed-test:
+	kubectl get pods -n sealed-secrets
+
+sealed-create-ns-database:
+	kubectl create namespace database
+
+# Tworzy plik ./go-hello/templates/sealedsecret-postgres.yaml
+# musi istniec ./postgresql/postgres-secret.yaml - w nim definiuje namespace 
+sealed-generate:
+	kubeseal \
+	--controller-name sealed-secrets \
+	--controller-namespace sealed-secrets \
+	--format yaml \
+	< ./charts/postgres/postgres-secret.yaml \
+	> ./charts/templates/sealedsecret-postgres.yaml
