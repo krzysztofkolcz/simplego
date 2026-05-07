@@ -9,18 +9,18 @@ import (
 	"strings"
 )
 
+var migrationRegex = regexp.MustCompile(`^(\d+)_(.+)\.(up|down)\.sql$`)
+
 type Migration struct {
-	Version int
-	Name    string
-	Up      bool
-	Down    bool
-	FileUp  string
+	Version  int
+	Name     string
+	Up       bool
+	Down     bool
+	FileUp   string
 	FileDown string
 }
 
-
 func ValidateMigrations(fsys fs.FS, path string) error {
-	var migrationRegex = regexp.MustCompile(`^(\d+)_(.+)\.(up|down)\.sql$`)
 	files, err := fs.ReadDir(fsys, path)
 	if err != nil {
 		return err
@@ -35,12 +35,10 @@ func ValidateMigrations(fsys fs.FS, path string) error {
 	for _, f := range files {
 		name := f.Name()
 
-		// 1. whitespace check
 		if strings.Contains(name, " ") {
 			return fmt.Errorf("invalid filename (contains space): %s", name)
 		}
 
-		// 2. regex match
 		matches := migrationRegex.FindStringSubmatch(name)
 		if matches == nil {
 			return fmt.Errorf("invalid migration filename: %s", name)
@@ -64,7 +62,6 @@ func ValidateMigrations(fsys fs.FS, path string) error {
 			migrations[version] = m
 		}
 
-		// 3. duplicate detection
 		if direction == "up" {
 			if m.Up {
 				return fmt.Errorf("duplicate up migration for version %d", version)
@@ -79,7 +76,6 @@ func ValidateMigrations(fsys fs.FS, path string) error {
 			m.FileDown = name
 		}
 
-		// 4. empty file check
 		content, err := fs.ReadFile(fsys, path+"/"+name)
 		if err != nil {
 			return err
@@ -89,7 +85,6 @@ func ValidateMigrations(fsys fs.FS, path string) error {
 		}
 	}
 
-	// 5. validate pairs
 	var versions []int
 	for v, m := range migrations {
 		if !m.Up {
@@ -103,7 +98,6 @@ func ValidateMigrations(fsys fs.FS, path string) error {
 
 	sort.Ints(versions)
 
-	// 6. gap detection (opcjonalne — możesz wyłączyć)
 	for i := 1; i < len(versions); i++ {
 		if versions[i] != versions[i-1]+1 {
 			return fmt.Errorf("gap in migrations: %d -> %d", versions[i-1], versions[i])

@@ -2,8 +2,10 @@ package integration
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"testing"
 	"time"
@@ -14,6 +16,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
+	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/krzysztofkolcz/mymigrations/db"
 )
@@ -25,10 +28,11 @@ func TestMain(m *testing.M) {
 	fmt.Println("TestMain")
 	ctx := context.Background()
 
-	// container, err := postgres.Run(ctx,
-	// 	"postgres:15",
-	// 	// testcontainers.WithReuse(true), // szybciej - nie dziala.
-	// )
+	logger := slog.New(slogctx.NewHandler(
+		slog.NewJSONHandler(os.Stdout, nil),
+		nil,
+	))
+
 	container, err := postgres.Run(ctx,
 		"postgres:15",
 		testcontainers.WithWaitStrategy(
@@ -39,16 +43,24 @@ func TestMain(m *testing.M) {
 		log.Fatal(err)
 	}
 
-	testDSN, err = container.ConnectionString(ctx, "sslmode=disable")
-	fmt.Println(testDSN)
+	dsn, err := container.ConnectionString(ctx, "sslmode=disable")
+	fmt.Println(dsn)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	testDB, err = pgxpool.New(ctx, testDSN)
+	testDB, err = pgxpool.New(ctx, dsn)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	sqlDb, err := sql.Open("pgx", dsn)
+	if err != nil {
+		logger.ErrorContext(ctx, "failed to create sqlDb", "err", err)
+		os.Exit(1)
+	}
+	defer sqlDb.Close()
+
 
 	for i := 0; i < 10; i++ {
 		if err := testDB.Ping(ctx); err == nil {
@@ -58,16 +70,16 @@ func TestMain(m *testing.M) {
 	}
 
 	// MIGRACJE
-	if err := db.MigratePublic(testDSN); err != nil && err != migrate.ErrNoChange {
+	if err := db.MigratePublic(ctx, dsn, logger); err != nil && err != migrate.ErrNoChange {
 		log.Fatal(err)
 	}
 
 	tenantID := uuid.New().String()
-	if err := db.CreateTenant(ctx, testDB, testDSN, tenantID); err != nil {
+	if err := db.CreateTenant(ctx, testDB, testDSN, tenantID, logger); err != nil {
 		log.Fatal(err)
 	}
 	
-	if err := db.MigrateAllTenants(ctx, testDB, testDSN); err != nil {
+	if err := db.MigrateAllTenants(ctx, testDB, sqlDb, testDSN, logger); err != nil {
 		log.Fatal(err)
 	}
 	code := m.Run()

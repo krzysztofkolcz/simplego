@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: go-hello-registry:5000/kkolcz/go-migrations
   pullPolicy: IfNotPresent
-  tag: "0.0.30"
+  tag: "0.0.34"
 
 service:
   type: ClusterIP
@@ -22,6 +22,9 @@ resources:
 
 migrate:
   enabled: true
+
+migrateRetry:
+  enabled: false   # domyślnie wyłączone
 
 app:
   name: go-migrations

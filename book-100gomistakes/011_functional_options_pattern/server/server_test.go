@@ -1,7 +1,7 @@
 package server_test
 
 import (
-	"simpleGo/100gomistakes/011_functional_options_pattern/server"
+	"simpleGo/book-100gomistakes/011_functional_options_pattern/server"
 	"testing"
 	"time"
 

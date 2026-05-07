@@ -1,7 +1,7 @@
 package exercises_test
 
 import (
-	"simpleGo/100gomistakes/011_functional_options_pattern/exercises"
+	"simpleGo/book-100gomistakes/011_functional_options_pattern/exercises"
 	"testing"
 )
 

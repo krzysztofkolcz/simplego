@@ -2,15 +2,18 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
-	"log"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 
-	mig "github.com/golang-migrate/migrate/v4"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/krzysztofkolcz/mymigrations/db"
+	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
 	slogctx "github.com/veqryn/slog-context"
 )
 
@@ -23,83 +26,115 @@ func main() {
 	ctx := context.Background()
 	dsn := buildDSNFromEnv()
 
-
-	handler := slogctx.NewHandler(
+	slogHandler := slogctx.NewHandler(
 		slog.NewJSONHandler(os.Stdout, nil),
 		nil,
 	)
-	logger := slog.New(handler)
+	logger := slog.New(slogHandler)
 
-	logger.InfoContext(ctx, "some info")
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		logger.ErrorContext(ctx, "failed to create pool", "err", err)
+		os.Exit(1)
+	}
+	defer pool.Close()
 
-	// dsn := "postgres://mymigrationsuser:mypassword@localhost:5432/mymigrationsdb?sslmode=disable"
-	pool, _ := pgxpool.New(ctx, dsn)
-	slog.Info("dsn", "", dsn)
+	sqlDb, err := sql.Open("pgx", dsn)
+	if err != nil {
+		logger.ErrorContext(ctx, "failed to create sqlDb", "err", err)
+		os.Exit(1)
+	}
+	defer sqlDb.Close()
 
 	switch mode {
 	case "migrate":
-		migrate(ctx, pool, dsn, logger)
+		if err := runMigrate(ctx, pool, sqlDb, dsn, logger); err != nil {
+			logger.ErrorContext(ctx, "migration failed", "err", err)
+			os.Exit(1)
+		}
 	case "serve":
-		runServer()
+		runServer(logger)
+	case "retry-failed":
+		err = retryFailed(ctx, pool, sqlDb, dsn, logger)
+		if err != nil {
+			logger.ErrorContext(ctx, "retry failed", "err", err)
+		}
 	default:
-		log.Fatalf("unknown mode: %s", mode)
-	}
-
-	
-}
-
-func migrate(ctx context.Context ,pool *pgxpool.Pool, dsn string, logger *slog.Logger){
-	err := db.ValidateMigrations(db.MigrationsFS, "migrations/tenant")
-	if err != nil {
-		log.Fatal("invalid tenant migrations:", err)
-	}
-
-	err = db.ValidateMigrations(db.MigrationsFS, "migrations/public")
-	if err != nil {
-		log.Fatal("invalid public migrations:", err)
-	}
-
-	if err := db.MigratePublicEmbed(dsn); err != nil && err != mig.ErrNoChange {
-		log.Fatal(err)
-	}
-
-	// tenantID := uuid.New().String()
-	// if err := db.CreateTenantEmbed(ctx, pool, dsn, tenantID, logger); err != nil {
-	// 	log.Fatal(err)
-	// }
-	
-	if err := db.MigrateAllTenantsEmbed(ctx, pool, dsn, logger); err != nil {
-		log.Fatal(err)
+		logger.ErrorContext(ctx, "unknown mode", "mode", mode)
+		os.Exit(1)
 	}
 }
 
-func buildDSNFromEnv()string{
-	dbHost := os.Getenv("DB_HOST")
+func runMigrate(ctx context.Context, pool *pgxpool.Pool,sqlDb *sql.DB, dsn string, logger *slog.Logger) error {
+	if err := db.ValidateMigrations(db.MigrationsFS, "migrations/tenant"); err != nil {
+		return fmt.Errorf("invalid tenant migrations: %w", err)
+	}
+
+	if err := db.ValidateMigrations(db.MigrationsFS, "migrations/public"); err != nil {
+		return fmt.Errorf("invalid public migrations: %w", err)
+	}
+
+	if err := db.MigratePublic(ctx, dsn, logger); err != nil {
+		return err
+	}
+
+	tenantID := uuid.New().String()
+	 db.CreateTenant(ctx, pool, dsn, tenantID, logger)
+
+	return db.MigrateAllTenants(ctx, pool, sqlDb, dsn, logger)
+}
+
+func retryFailed(ctx context.Context, pool *pgxpool.Pool, sqlDb *sql.DB, dsn string, logger *slog.Logger) error {
+	rows, err := pool.Query(ctx, `
+		SELECT id, schema_name
+		FROM tenants
+		WHERE migration_status = 'failed'
+	`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id, schema string
+		rows.Scan(&id, &schema)
+		err = db.MigrateSingleTenantWrapper(ctx, sqlDb, dsn, id, schema, logger)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func buildDSNFromEnv() string {
 	dbPort := os.Getenv("DB_PORT")
 	if dbPort == "" {
 		dbPort = "5432"
 	}
-	dbname := os.Getenv("DB_NAME")
-	dbuser := os.Getenv("DB_USER")
-	dbpass := os.Getenv("DB_PASS")
-	dsn := "postgres://"+dbuser+":"+dbpass+"@"+dbHost+":"+dbPort+"/"+dbname+"?sslmode=disable"
-	return dsn
 
+	u := &url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(os.Getenv("DB_USER"), os.Getenv("DB_PASS")),
+		Host:     net.JoinHostPort(os.Getenv("DB_HOST"), dbPort),
+		Path:     "/" + os.Getenv("DB_NAME"),
+		RawQuery: "sslmode=disable",
+	}
+	return u.String()
 }
 
-
-func handler(w http.ResponseWriter, r *http.Request) {
+func httpHandler(w http.ResponseWriter, r *http.Request) {
 	name := os.Getenv("APP_NAME")
 	if name == "" {
 		name = "go-migrations"
 	}
-	dbname := os.Getenv("DB_NAME")
-	dbpass := os.Getenv("DB_PASS")
-	fmt.Fprintf(w, "X Hello from %s! DB_NAME: %s, DB_PASS: %s", name, dbname, dbpass)
+	fmt.Fprintf(w, "Hello from %s!", name)
 }
 
-func runServer() {
-	http.HandleFunc("/", handler)
-	port := ":8080"
-	http.ListenAndServe(port, nil)
+func runServer(logger *slog.Logger) {
+	http.HandleFunc("/", httpHandler)
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		logger.Error("server error", "err", err)
+		os.Exit(1)
+	}
 }

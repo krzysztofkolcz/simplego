@@ -3,9 +3,8 @@ package user_test
 import (
 	"context"
 	"errors"
+	user "simpleGo/my-go-topics/my-transactions/service"
 	"testing"
-
-	user "simpleGo/service"
 )
 
 func TestCreateGroup(t *testing.T) {

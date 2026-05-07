@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/krzysztofkolcz/mymigrations/db"
+	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
 )
 
 /*

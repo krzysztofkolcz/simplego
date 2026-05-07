@@ -1,10 +1,12 @@
-package db_test
+package integration
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"testing"
 
 	"github.com/google/uuid"
@@ -12,6 +14,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/krzysztofkolcz/mymigrations/db"
 	"github.com/stretchr/testify/require"
+	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
@@ -64,7 +67,6 @@ func startPostgres(t *testing.T, ctx context.Context) (dsn string, pool *pgxpool
 	return dsn, pool, terminate
 }
 
-// --- TEST 1: Full flow ---
 
 func TestFullMigrationFlow(t *testing.T) {
 	ctx := context.Background()
@@ -72,47 +74,70 @@ func TestFullMigrationFlow(t *testing.T) {
 	dsn, pool, terminate := startPostgres(t, ctx)
 	defer terminate()
 
+	logger := slog.New(slogctx.NewHandler(
+		slog.NewJSONHandler(os.Stdout, nil),
+		nil,
+	))
+
+	sqlDb, err := sql.Open("pgx", dsn)
+	if err != nil {
+		logger.ErrorContext(ctx, "failed to create sqlDb", "err", err)
+		os.Exit(1)
+	}
+	defer sqlDb.Close()
+
 	// 1. public
-	require.NoError(t, db.MigratePublicEmbed(dsn))
+	require.NoError(t, db.MigratePublic(ctx, dsn, logger))
+	assertTableExists(t, ctx, pool, "public", "tenants")
+	assertTableExists(t, ctx, pool, "public", "users")
 
 	// 2. create tenant
 	tenantID := uuid.New().String()
-	schema := "tenant_" + tenantID
+	schema := db.CreateSchemaName(tenantID)
 
-	require.NoError(t, db.CreateTenantEmbed(ctx, pool, dsn, tenantID, nilLogger()))
+	require.NoError(t, db.CreateTenant(ctx, pool, dsn, tenantID, nilLogger()))
 
 	// 3. migrate tenant(s)
-	require.NoError(t, db.MigrateAllTenantsEmbed(ctx, pool, dsn, nilLogger()))
+	require.NoError(t, db.MigrateAllTenants(ctx, pool, sqlDb, dsn, logger))
 
 	// 4. verify one table from tenant migrations
-	assertTableExists(t, ctx, pool, schema, "test_123") // dostosuj nazwę
+	assertTableExists(t, ctx, pool, schema, "todos")
 
 	// 5. version check
 	var version int
-	err := pool.QueryRow(ctx,
+	err = pool.QueryRow(ctx,
 		fmt.Sprintf(`SELECT version FROM "%s".schema_migrations`, schema),
 	).Scan(&version)
 	require.NoError(t, err)
 
-	const latestVersion = 6 // ← dostosuj
+	const latestVersion = 1
 	require.Equal(t, latestVersion, version)
 }
 
-// --- TEST 2: wszystkie tabele tenant ---
-
 func TestTenantMigrations_AllTables(t *testing.T) {
 	ctx := context.Background()
+	logger := slog.New(slogctx.NewHandler(
+		slog.NewJSONHandler(os.Stdout, nil),
+		nil,
+	))
 
 	dsn, pool, terminate := startPostgres(t, ctx)
 	defer terminate()
 
-	require.NoError(t, db.MigratePublicEmbed(dsn))
+	sqlDb, err := sql.Open("pgx", dsn)
+	if err != nil {
+		logger.ErrorContext(ctx, "failed to create sqlDb", "err", err)
+		os.Exit(1)
+	}
+	defer sqlDb.Close()
 
-	tenantID := "1"
+	require.NoError(t, db.MigratePublic(ctx, dsn, logger))
+
+	tenantID := uuid.New().String()
 	schema := "tenant_test"
 
 	// create schema + wpis do tenants
-	_, err := pool.Exec(ctx, fmt.Sprintf(`CREATE SCHEMA "%s"`, schema))
+	_, err = pool.Exec(ctx, fmt.Sprintf(`CREATE SCHEMA "%s"`, schema))
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx,
@@ -122,13 +147,11 @@ func TestTenantMigrations_AllTables(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	require.NoError(t, db.MigrateAllTenantsEmbed(ctx, pool, dsn, nilLogger()))
+	require.NoError(t, db.MigrateAllTenants(ctx, pool, sqlDb, dsn, logger))
 
 	// 🔴 dostosuj do swoich migracji
 	expectedTables := []string{
-		"test_123",
-		// "todos",
-		// "orders",
+		"todos",
 	}
 
 	for _, table := range expectedTables {
@@ -140,20 +163,31 @@ func TestTenantMigrations_AllTables(t *testing.T) {
 
 func TestMigrations_Idempotent(t *testing.T) {
 	ctx := context.Background()
+	logger := slog.New(slogctx.NewHandler(
+		slog.NewJSONHandler(os.Stdout, nil),
+		nil,
+	))
 
 	dsn, pool, terminate := startPostgres(t, ctx)
 	defer terminate()
 
-	require.NoError(t, db.MigratePublicEmbed(dsn))
+	sqlDb, err := sql.Open("pgx", dsn)
+	if err != nil {
+		logger.ErrorContext(ctx, "failed to create sqlDb", "err", err)
+		os.Exit(1)
+	}
+	defer sqlDb.Close()
+
+	require.NoError(t, db.MigratePublic(ctx,dsn,logger))
 
 	tenantID := uuid.New().String()
 
-	require.NoError(t, db.CreateTenantEmbed(ctx, pool, dsn, tenantID, nilLogger()))
+	require.NoError(t, db.CreateTenant(ctx, pool, dsn, tenantID, nilLogger()))
 
 	// 🔁 uruchamiamy wielokrotnie
-	require.NoError(t, db.MigrateAllTenantsEmbed(ctx, pool, dsn, nilLogger()))
-	require.NoError(t, db.MigrateAllTenantsEmbed(ctx, pool, dsn, nilLogger()))
-	require.NoError(t, db.MigrateAllTenantsEmbed(ctx, pool, dsn, nilLogger()))
+	require.NoError(t, db.MigrateAllTenants(ctx, pool, sqlDb, dsn, logger))
+	require.NoError(t, db.MigrateAllTenants(ctx, pool, sqlDb, dsn, logger))
+	require.NoError(t, db.MigrateAllTenants(ctx, pool, sqlDb, dsn, logger))
 
 	// jeśli coś by się wysypało (duplikaty, konflikty), test padnie
 }
@@ -166,22 +200,35 @@ func TestFullMigrationFlow_MultipleTenants(t *testing.T) {
 	dsn, pool, terminate := startPostgres(t, ctx)
 	defer terminate()
 
-	require.NoError(t, db.MigratePublicEmbed(dsn))
+	logger := slog.New(slogctx.NewHandler(
+		slog.NewJSONHandler(os.Stdout, nil),
+		nil,
+	))
+
+
+	sqlDb, err := sql.Open("pgx", dsn)
+	if err != nil {
+		logger.ErrorContext(ctx, "failed to create sqlDb", "err", err)
+		os.Exit(1)
+	}
+	defer sqlDb.Close()
+
+	require.NoError(t, db.MigratePublic(ctx, dsn, logger))
 
 	tenantCount := 3
 	schemas := make([]string, 0, tenantCount)
 
 	for i := 0; i < tenantCount; i++ {
 		tenantID := uuid.New().String()
-		schema := "tenant_" + tenantID
+		schema := db.CreateSchemaName(tenantID)
 		schemas = append(schemas, schema)
 
-		require.NoError(t, db.CreateTenantEmbed(ctx, pool, dsn, tenantID, nilLogger()))
+		require.NoError(t, db.CreateTenant(ctx, pool, dsn, tenantID, nilLogger()))
 	}
 
-	require.NoError(t, db.MigrateAllTenantsEmbed(ctx, pool, dsn, nilLogger()))
+	require.NoError(t, db.MigrateAllTenants(ctx, pool, sqlDb, dsn, logger))
 
 	for _, schema := range schemas {
-		assertTableExists(t, ctx, pool, schema, "test_123")
+		assertTableExists(t, ctx, pool, schema, "todos")
 	}
 }

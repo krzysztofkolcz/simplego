@@ -2,11 +2,11 @@ package transactions
 
 import (
 	"fmt"
+	"simpleGo/my-go-topics/my-transactions/model"
 	"time"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"simpleGo/model"
 )
 
 func Transaction000() {

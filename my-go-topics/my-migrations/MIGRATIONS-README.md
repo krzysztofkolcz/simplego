@@ -851,3 +851,24 @@ Dodałem migrację 002.init.up.sql do db/tenant, ale nie poszła migracja
 
 # TODO
 Jak powtórzyć migracje które padły? Zapisywać listę tenantów z errorami?
+
+# Procedura obsługi errorów migracji
+```
+deploy →
+  migrate public (blokujące)
+  →
+  job migrate-tenants (best effort)
+      → zapis statusów
+      → retry failed
+```
+
+# Flow migracji
+## simplego/my-go-topics/my-migrations
+make psql-pf
+baza appdb, utworzony user z all privileges
+
+## Nowy plik migracji
+Dodanie plików migracjie (TODO - nazewnictwo jako daty) do katalogu ./db/migrations/public lub ./db/migrations/tenant
+bash ./bump.sh # podbicie wersji
+make k3d-image
+make k3d-helm-up

@@ -30,7 +30,7 @@ REGISTRY_PORT=5000
 # Helm install
 ####
 # Start 
-VERSION=0.0.30
+VERSION=0.0.34
 IMAGE=kkolcz/go-migrations
 HOST_REGISTRY=localhost:5000
 CLUSTER_NAME=go-hello-cluster
@@ -69,6 +69,20 @@ k3d-dry-run:
 	-f $(CHART_DIR)/values.yaml \
 	--dry-run \
 	--debug
+
+k3d-retry-failed:
+	helm upgrade $(RELEASE) $(CHART_DIR) --set migrateRetry.enabled=true
+
+k-retry-failed:
+	kubectl apply -f charts/templates/migrate-retry-failed-job.yaml
+
+# obserwuj logi na bieżąco
+k-retry-failed-logs:
+	kubectl logs -f job/migrate-retry-failed-job -n $(NAMESPACE)
+
+# po zakończeniu — usuń żeby następnym razem móc apply znowu
+k-retry-failed-logs:
+	kubectl delete -f job/migrate-retry-failed-job -n $(NAMESPACE)
 
 pf:
 	kubectl port-forward svc/rel001-charts 8080:80

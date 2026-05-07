@@ -3,10 +3,13 @@ package integration
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"os"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/krzysztofkolcz/mymigrations/db"
+	slogctx "github.com/veqryn/slog-context"
 )
 
 func TestPublicMigrations(t *testing.T) {
@@ -46,8 +49,13 @@ func TestTenantMigrations(t *testing.T) {
 	tenantID := uuid.New().String()
 	schema := db.CreateSchemaName(tenantID)
 
+	logger := slog.New(slogctx.NewHandler(
+		slog.NewJSONHandler(os.Stdout, nil),
+		nil,
+	))
+
 	// tworzymy tenant + migracje
-	err := db.CreateTenant(ctx, testDB, testDSN, tenantID)
+	err := db.CreateTenant(ctx, testDB, testDSN, tenantID, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,11 +81,15 @@ func TestTenantMigrations(t *testing.T) {
 
 func TestTenantTableWorks(t *testing.T) {
 	ctx := context.Background()
+	logger := slog.New(slogctx.NewHandler(
+		slog.NewJSONHandler(os.Stdout, nil),
+		nil,
+	))
 
 	tenantID := uuid.New().String()
 	schema := db.CreateSchemaName(tenantID)
 
-	err := db.CreateTenant(ctx, testDB, testDSN, tenantID)
+	err := db.CreateTenant(ctx, testDB, testDSN, tenantID, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
