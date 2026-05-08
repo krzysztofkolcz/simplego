@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/krzysztofkolcz/mymigrations/db"
+	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
 	slogctx "github.com/veqryn/slog-context"
 )
 

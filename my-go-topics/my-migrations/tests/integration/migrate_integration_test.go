@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/krzysztofkolcz/mymigrations/db"
+	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
 	"github.com/stretchr/testify/require"
 	slogctx "github.com/veqryn/slog-context"
 

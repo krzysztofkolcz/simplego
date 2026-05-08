@@ -18,7 +18,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 	slogctx "github.com/veqryn/slog-context"
 
-	"github.com/krzysztofkolcz/mymigrations/db"
+	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
 )
 
 var testDB *pgxpool.Pool
