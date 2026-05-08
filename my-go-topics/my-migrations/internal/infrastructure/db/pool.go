@@ -10,17 +10,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Config struct {
-	DatabaseURL string
-
-	MaxConns        int32
-	MinConns        int32
-	MaxConnLifetime time.Duration
-	MaxConnIdleTime time.Duration
-
-	HealthCheckPeriod time.Duration
-}
-
 func NewPool(
 	ctx context.Context,
 	cfg Config,

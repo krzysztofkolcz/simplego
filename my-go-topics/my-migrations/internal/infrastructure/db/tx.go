@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc"
+	sqlc "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query"
 )
 
 type TxManager struct {

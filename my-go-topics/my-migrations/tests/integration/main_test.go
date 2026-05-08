@@ -13,6 +13,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -21,8 +22,14 @@ import (
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
 )
 
-var testDB *pgxpool.Pool
-var testDSN string
+var ConnectionPool *pgxpool.Pool
+var SqlDb *sql.DB
+var TestDsn string
+var TenantId string
+var TenantSchema string
+var ExpectedTables = []string{
+	"todos",
+}
 
 func TestMain(m *testing.M) {
 	fmt.Println("TestMain")
@@ -35,6 +42,9 @@ func TestMain(m *testing.M) {
 
 	container, err := postgres.Run(ctx,
 		"postgres:15",
+		postgres.WithDatabase("testdb"),
+		postgres.WithUsername("user"),
+		postgres.WithPassword("password"),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections"),
 		),
@@ -42,44 +52,46 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer container.Terminate(ctx)
 
-	dsn, err := container.ConnectionString(ctx, "sslmode=disable")
-	fmt.Println(dsn)
+	TestDsn, err = container.ConnectionString(ctx, "sslmode=disable")
+	fmt.Println(TestDsn)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	testDB, err = pgxpool.New(ctx, dsn)
+	ConnectionPool, err = pgxpool.New(ctx, TestDsn)
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer ConnectionPool.Close()
 
-	sqlDb, err := sql.Open("pgx", dsn)
+	SqlDb, err = sql.Open("pgx", TestDsn)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to create sqlDb", "err", err)
 		os.Exit(1)
 	}
-	defer sqlDb.Close()
-
+	defer SqlDb.Close()
 
 	for i := 0; i < 10; i++ {
-		if err := testDB.Ping(ctx); err == nil {
+		if err := ConnectionPool.Ping(ctx); err == nil {
 			break
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
 
 	// MIGRACJE
-	if err := db.MigratePublic(ctx, dsn, logger); err != nil && err != migrate.ErrNoChange {
+	if err := db.MigratePublic(ctx, TestDsn, logger); err != nil && err != migrate.ErrNoChange {
 		log.Fatal(err)
 	}
 
-	tenantID := uuid.New().String()
-	if err := db.CreateTenant(ctx, testDB, testDSN, tenantID, logger); err != nil {
+	TenantId = uuid.New().String()
+	TenantSchema = db.CreateSchemaName(TenantId)
+	if err := db.CreateTenant(ctx, ConnectionPool, TestDsn, TenantId, logger); err != nil {
 		log.Fatal(err)
 	}
-	
-	if err := db.MigrateAllTenants(ctx, testDB, sqlDb, testDSN, logger); err != nil {
+
+	if err := db.MigrateAllTenants(ctx, ConnectionPool, SqlDb, TestDsn, logger); err != nil {
 		log.Fatal(err)
 	}
 	code := m.Run()

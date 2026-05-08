@@ -14,6 +14,7 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 //go:embed migrations/*
@@ -50,10 +51,9 @@ func MigrateAllTenants(ctx context.Context, pool *pgxpool.Pool, sqlDb *sql.DB, d
 	var failed []string
 	rows, err := pool.Query(ctx, `SELECT id, schema_name FROM tenants`)
 	if err != nil {
-		return  err
+		return err
 	}
 	defer rows.Close()
-
 
 	for rows.Next() {
 		var id, schema string
@@ -73,7 +73,7 @@ func MigrateAllTenants(ctx context.Context, pool *pgxpool.Pool, sqlDb *sql.DB, d
 	}
 
 	if len(failed) > 0 {
-		return  fmt.Errorf("failed tenants: %v", failed) 
+		return fmt.Errorf("failed tenants: %v", failed)
 	}
 
 	return nil
@@ -103,7 +103,6 @@ func CreateTenant(ctx context.Context, pool *pgxpool.Pool, dsn, tenantID string,
 	return tx.Commit(ctx)
 }
 
-
 func MigrateTenant(
 	ctx context.Context,
 	sqlDb *sql.DB,
@@ -116,28 +115,28 @@ func MigrateTenant(
 	}
 
 	/*
-	Claude.ai - https://claude.ai/chat/edae26e3-b9a2-4ec1-b339-21ef4db45606
-	sqlDb.ExecContext(ctx, "SET search_path TO "+quotedSchema)
-	sql.DB to pula połączeń — SET search_path ustawia stan na konkretnym połączeniu, 
-	ale kolejne zapytanie może trafić na inne. 
-	Przy współbieżnym wykonaniu (nawet sekwencyjnym z powrotem połączenia do puli) 
-	może dojść do migracji w złym schemacie. 
-	Rozwiązanie: użyj search_path w DSN-ie lub dedykowanego połączenia (sqlDb.Conn(ctx)):
+		Claude.ai - https://claude.ai/chat/edae26e3-b9a2-4ec1-b339-21ef4db45606
+		sqlDb.ExecContext(ctx, "SET search_path TO "+quotedSchema)
+		sql.DB to pula połączeń — SET search_path ustawia stan na konkretnym połączeniu,
+		ale kolejne zapytanie może trafić na inne.
+		Przy współbieżnym wykonaniu (nawet sekwencyjnym z powrotem połączenia do puli)
+		może dojść do migracji w złym schemacie.
+		Rozwiązanie: użyj search_path w DSN-ie lub dedykowanego połączenia (sqlDb.Conn(ctx)):
 	*/
 	conn, err := sqlDb.Conn(ctx)
-    if err != nil {
-        return fmt.Errorf("acquire conn: %w", err)
-    }
-    defer func() {
-        // reset search_path before returning to pool to avoid contaminating other queries
-        _, _ = conn.ExecContext(ctx, "SET search_path TO public")
-        conn.Close()
-    }()
+	if err != nil {
+		return fmt.Errorf("acquire conn: %w", err)
+	}
+	defer func() {
+		// reset search_path before returning to pool to avoid contaminating other queries
+		_, _ = conn.ExecContext(ctx, "SET search_path TO public")
+		conn.Close()
+	}()
 
-    quotedSchema := `"` + strings.ReplaceAll(schema, `"`, `""`) + `"`
-    if _, err := conn.ExecContext(ctx, "SET search_path TO "+quotedSchema); err != nil {
-        return fmt.Errorf("set search_path: %w", err)
-    }
+	quotedSchema := `"` + strings.ReplaceAll(schema, `"`, `""`) + `"`
+	if _, err := conn.ExecContext(ctx, "SET search_path TO "+quotedSchema); err != nil {
+		return fmt.Errorf("set search_path: %w", err)
+	}
 
 	driver, err := postgres.WithConnection(ctx, conn, &postgres.Config{
 		MigrationsTable: "schema_migrations",
@@ -160,7 +159,6 @@ func MigrateTenant(
 	logger.InfoContext(ctx, "tenant migrated", "schema", schema)
 	return nil
 }
-
 
 func MigrateSingleTenantWrapper(
 	ctx context.Context,

@@ -133,3 +133,13 @@ sealed-generate:
 	--format yaml \
 	< ./charts/postgres/postgres-secret.yaml \
 	> ./charts/templates/sealedsecret-postgres.yaml
+
+test-single: docker-host-mackbook
+	go test ./tests/integration -run TestPublicMigrations -v
+
+
+sqlc-generate:
+	sqlc generate
+
+docker-host-mackbook:
+	export DOCKER_HOST=unix:///Users/C5383717/.colima/default/docker.sock

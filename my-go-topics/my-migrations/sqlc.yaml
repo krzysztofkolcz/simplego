@@ -8,7 +8,8 @@ sql:
       - "internal/infrastructure/db/migrations/tenant"
 
     queries:
-      - "internal/infrastructure/db/queries/command"
+      - "internal/infrastructure/db/queries/command/public"
+      - "internal/infrastructure/db/queries/command/tenant"
 
     gen:
       go:
@@ -32,7 +33,8 @@ sql:
       - "internal/infrastructure/db/migrations/tenant"
 
     queries:
-      - "internal/infrastructure/db/queries/query"
+      - "internal/infrastructure/db/queries/query/public"
+      - "internal/infrastructure/db/queries/query/tenant"
 
     gen:
       go:

@@ -8,7 +8,9 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
+	"github.com/stretchr/testify/require"
 	slogctx "github.com/veqryn/slog-context"
 )
 
@@ -16,31 +18,15 @@ func TestPublicMigrations(t *testing.T) {
 	ctx := context.Background()
 
 	// schema public
-	ok, err := schemaExists(ctx, testDB, "public")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !ok {
-		t.Fatal("public schema does not exist")
-	}
-
+	assertSchemaExists(t, ctx, ConnectionPool, "public")
 	// users
-	ok, err = tableExists(ctx, testDB, "public", "users")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !ok {
-		t.Fatal("users table missing")
-	}
-
+	assertTableExists(t, ctx, ConnectionPool, "public", "users")
 	// tenants
-	ok, err = tableExists(ctx, testDB, "public", "tenants")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !ok {
-		t.Fatal("tenants table missing")
-	}
+	assertTableExists(t, ctx, ConnectionPool, "public", "tenants")
+
+	assertTablesExists(t, ctx, ConnectionPool, TenantSchema, ExpectedTables)
+
+	assertMigrationVersion(t, ctx, ConnectionPool, TenantSchema, 1)
 }
 
 func TestTenantMigrations(t *testing.T) {
@@ -55,28 +41,16 @@ func TestTenantMigrations(t *testing.T) {
 	))
 
 	// tworzymy tenant + migracje
-	err := db.CreateTenant(ctx, testDB, testDSN, tenantID, logger)
+	err := db.CreateTenant(ctx, ConnectionPool, TestDsn, tenantID, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// schema istnieje?
-	ok, err := schemaExists(ctx, testDB, schema)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !ok {
-		t.Fatalf("schema %s not created", schema)
-	}
+	assertSchemaExists(t, ctx, ConnectionPool, schema)
 
 	// tabela todos istnieje?
-	ok, err = tableExists(ctx, testDB, schema, "todos")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !ok {
-		t.Fatalf("todos table missing in %s", schema)
-	}
+	assertTableExists(t, ctx, ConnectionPool, schema, "todos")
 }
 
 func TestTenantTableWorks(t *testing.T) {
@@ -89,23 +63,96 @@ func TestTenantTableWorks(t *testing.T) {
 	tenantID := uuid.New().String()
 	schema := db.CreateSchemaName(tenantID)
 
-	err := db.CreateTenant(ctx, testDB, testDSN, tenantID, logger)
+	err := db.CreateTenant(ctx, ConnectionPool, TestDsn, tenantID, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// ustawiamy search_path
-	_, err = testDB.Exec(ctx,
+	_, err = ConnectionPool.Exec(ctx,
 		fmt.Sprintf(`SET search_path TO %s`, schema),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = testDB.Exec(ctx, `
+	_, err = ConnectionPool.Exec(ctx, `
 		INSERT INTO todos (id, title) VALUES (gen_random_uuid(), 'test')
 	`)
 	if err != nil {
 		t.Fatal("insert failed -> migracja jest błędna")
 	}
+}
+
+func TestMigrationsIdempotency(t *testing.T) {
+	ctx := context.Background()
+	logger := slog.New(slogctx.NewHandler(
+		slog.NewJSONHandler(os.Stdout, nil),
+		nil,
+	))
+
+	require.NoError(t, db.MigratePublic(ctx, TestDsn, logger))
+
+	tenantID := uuid.New().String()
+	require.NoError(t, db.CreateTenant(ctx, ConnectionPool, TestDsn, tenantID, logger))
+
+	// 🔁 uruchamiamy wielokrotnie
+	// jeśli coś by się wysypało (duplikaty, konflikty), test padnie
+	require.NoError(t, db.MigrateAllTenants(ctx, ConnectionPool, SqlDb, TestDsn, logger))
+	require.NoError(t, db.MigrateAllTenants(ctx, ConnectionPool, SqlDb, TestDsn, logger))
+	require.NoError(t, db.MigrateAllTenants(ctx, ConnectionPool, SqlDb, TestDsn, logger))
+}
+
+func assertTablesExists(t *testing.T, ctx context.Context, pool *pgxpool.Pool, schema string, tables []string) {
+	for _, table := range tables {
+		assertTableExists(t, ctx, pool, schema, table)
+	}
+}
+
+func assertTableExists(t *testing.T, ctx context.Context, pool *pgxpool.Pool, schema, table string) {
+	t.Helper()
+
+	var exists bool
+	query := `
+	SELECT EXISTS (
+		SELECT 1
+		FROM information_schema.tables
+		WHERE table_schema = $1
+		AND table_name = $2
+	)
+	`
+	err := pool.QueryRow(ctx, query, schema, table).Scan(&exists)
+	require.NoError(t, err)
+	require.Truef(t, exists, "table %s.%s should exist", schema, table)
+}
+
+func assertSchemaExists(t *testing.T, ctx context.Context, pool *pgxpool.Pool, schema string) {
+	var exists bool
+
+	query := `
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.schemata
+			WHERE schema_name = $1
+		)
+	`
+
+	err := pool.QueryRow(ctx, query, schema).Scan(&exists)
+	require.NoError(t, err)
+	require.Truef(t, exists, "schema %s should exist", schema)
+}
+
+func assertMigrationVersion(
+	t *testing.T,
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	schema string,
+	expectedVersion int,
+) {
+	var version int
+	err := pool.QueryRow(ctx,
+		fmt.Sprintf(`SELECT version FROM "%s".schema_migrations`, schema),
+	).Scan(&version)
+	require.NoError(t, err)
+
+	require.Equal(t, expectedVersion, version)
 }
