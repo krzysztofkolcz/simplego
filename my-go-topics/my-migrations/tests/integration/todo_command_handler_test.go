@@ -8,14 +8,14 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 
-	"github.com/krzysztofkolcz/mymigrations/internal/domain/todo"
+	"github.com/krzysztofkolcz/mymigrations/internal/application/command"
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
 	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command"
 	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query"
 	tenantrepo "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/repository/tenant"
 )
 
-func TestTodoRepository_Create(t *testing.T) {
+func TestCreateTodoHandler_Handle(t *testing.T) {
 	ctx := context.Background()
 	txManager := db.NewTxManager(ConnectionPool)
 
@@ -24,23 +24,24 @@ func TestTodoRepository_Create(t *testing.T) {
 	err := txManager.WithinTransaction(ctx, TenantSchema, func(commandQ *commanddb.Queries) error {
 		queryQ := querydb.New(commandQ.DB())
 		repo := tenantrepo.NewTodoRepository(commandQ, queryQ)
+		handler := command.NewCreateTodoHandler(repo)
 
-		td := todo.Todo{
-			ID:    uuid.New(),
-			Title: "learn sqlc",
+		id, err := handler.Handle(ctx, command.CreateTodoCommand{Title: "buy milk"})
+		if err != nil {
+			return err
 		}
-		createdID = td.ID
-
-		return repo.Create(ctx, td)
+		createdID = id
+		return nil
 	})
 	require.NoError(t, err)
+	require.NotEqual(t, uuid.Nil, createdID)
 
 	err = txManager.WithinTransactionReadonly(ctx, TenantSchema, func(queryQ *querydb.Queries) error {
 		repo := tenantrepo.NewTodoRepository(nil, queryQ)
 
 		result, err := repo.GetByID(ctx, createdID)
 		require.NoError(t, err)
-		require.Equal(t, "learn sqlc", result.Title)
+		require.Equal(t, "buy milk", result.Title)
 		require.False(t, result.Completed)
 
 		return nil
@@ -48,25 +49,29 @@ func TestTodoRepository_Create(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestTodoRepository_Complete(t *testing.T) {
+func TestCompleteTodoHandler_Handle(t *testing.T) {
 	ctx := context.Background()
 	txManager := db.NewTxManager(ConnectionPool)
 
-	id := uuid.New()
+	var id uuid.UUID
 
 	err := txManager.WithinTransaction(ctx, TenantSchema, func(commandQ *commanddb.Queries) error {
 		queryQ := querydb.New(commandQ.DB())
 		repo := tenantrepo.NewTodoRepository(commandQ, queryQ)
+		handler := command.NewCreateTodoHandler(repo)
 
-		return repo.Create(ctx, todo.Todo{ID: id, Title: "to be completed"})
+		var err error
+		id, err = handler.Handle(ctx, command.CreateTodoCommand{Title: "read a book"})
+		return err
 	})
 	require.NoError(t, err)
 
 	err = txManager.WithinTransaction(ctx, TenantSchema, func(commandQ *commanddb.Queries) error {
 		queryQ := querydb.New(commandQ.DB())
 		repo := tenantrepo.NewTodoRepository(commandQ, queryQ)
+		handler := command.NewCompleteTodoHandler(repo)
 
-		return repo.Complete(ctx, id)
+		return handler.Handle(ctx, command.CompleteTodoCommand{ID: id})
 	})
 	require.NoError(t, err)
 
@@ -82,25 +87,29 @@ func TestTodoRepository_Complete(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestTodoRepository_Delete(t *testing.T) {
+func TestDeleteTodoHandler_Handle(t *testing.T) {
 	ctx := context.Background()
 	txManager := db.NewTxManager(ConnectionPool)
 
-	id := uuid.New()
+	var id uuid.UUID
 
 	err := txManager.WithinTransaction(ctx, TenantSchema, func(commandQ *commanddb.Queries) error {
 		queryQ := querydb.New(commandQ.DB())
 		repo := tenantrepo.NewTodoRepository(commandQ, queryQ)
+		handler := command.NewCreateTodoHandler(repo)
 
-		return repo.Create(ctx, todo.Todo{ID: id, Title: "to be deleted"})
+		var err error
+		id, err = handler.Handle(ctx, command.CreateTodoCommand{Title: "write tests"})
+		return err
 	})
 	require.NoError(t, err)
 
 	err = txManager.WithinTransaction(ctx, TenantSchema, func(commandQ *commanddb.Queries) error {
 		queryQ := querydb.New(commandQ.DB())
 		repo := tenantrepo.NewTodoRepository(commandQ, queryQ)
+		handler := command.NewDeleteTodoHandler(repo)
 
-		return repo.Delete(ctx, id)
+		return handler.Handle(ctx, command.DeleteTodoCommand{ID: id})
 	})
 	require.NoError(t, err)
 

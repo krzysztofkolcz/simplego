@@ -98,7 +98,7 @@ func retryFailed(ctx context.Context, pool *pgxpool.Pool, sqlDb *sql.DB, dsn str
 	for rows.Next() {
 		var id, schema string
 		rows.Scan(&id, &schema)
-		err = db.MigrateSingleTenantWrapper(ctx, sqlDb, dsn, id, schema, logger)
+		err = db.MigrateSingleTenantWrapper(ctx, sqlDb, id, schema, logger)
 		if err != nil {
 			return err
 		}
