@@ -1,0 +1,42 @@
+package repository
+
+import (
+	"context"
+
+	"github.com/krzysztofkolcz/mymigrations/internal/domain/todo"
+	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
+	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command"
+	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query"
+)
+
+type TodoUnitOfWork struct {
+	txManager    *db.TxManager
+	tenantSchema string
+}
+
+func NewTodoUnitOfWork(
+	txManager *db.TxManager,
+	tenantSchema string,
+) *TodoUnitOfWork {
+
+	return &TodoUnitOfWork{
+		txManager:    txManager,
+		tenantSchema: tenantSchema,
+	}
+}
+
+func (u *TodoUnitOfWork) Execute(
+	ctx context.Context,
+	fn func(repo todo.Repository) error,
+) error {
+
+	return u.txManager.WithinTransaction(
+		ctx,
+		u.tenantSchema,
+		func(commandQ *commanddb.Queries) error {
+			queryQ := querydb.New(commandQ.DB())
+			repo := NewTodoRepository(commandQ, queryQ)
+			return fn(repo)
+		},
+	)
+}

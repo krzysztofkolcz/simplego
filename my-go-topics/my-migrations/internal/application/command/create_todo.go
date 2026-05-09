@@ -13,11 +13,11 @@ type CreateTodoCommand struct {
 }
 
 type CreateTodoHandler struct {
-	repo todo.Repository
+	uow todo.UnitOfWork
 }
 
-func NewCreateTodoHandler(repo todo.Repository) *CreateTodoHandler {
-	return &CreateTodoHandler{repo: repo}
+func NewCreateTodoHandler(uow todo.UnitOfWork) *CreateTodoHandler {
+	return &CreateTodoHandler{uow: uow}
 }
 
 func (h *CreateTodoHandler) Handle(
@@ -30,7 +30,10 @@ func (h *CreateTodoHandler) Handle(
 		Title: cmd.Title,
 	}
 
-	if err := h.repo.Create(ctx, t); err != nil {
+	err := h.uow.Execute(ctx, func(repo todo.Repository) error {
+		return repo.Create(ctx, t)
+	})
+	if err != nil {
 		return uuid.Nil, err
 	}
 

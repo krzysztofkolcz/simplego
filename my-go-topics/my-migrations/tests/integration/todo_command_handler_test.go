@@ -4,38 +4,25 @@ import (
 	"context"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 
 	"github.com/krzysztofkolcz/mymigrations/internal/application/command"
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
-	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command"
 	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query"
 	tenantrepo "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/repository/tenant"
 )
 
 func TestCreateTodoHandler_Handle(t *testing.T) {
 	ctx := context.Background()
-	txManager := db.NewTxManager(ConnectionPool)
+	uow := tenantrepo.NewTodoUnitOfWork(db.NewTxManager(ConnectionPool), TenantSchema)
+	handler := command.NewCreateTodoHandler(uow)
 
-	var createdID uuid.UUID
-
-	err := txManager.WithinTransaction(ctx, TenantSchema, func(commandQ *commanddb.Queries) error {
-		queryQ := querydb.New(commandQ.DB())
-		repo := tenantrepo.NewTodoRepository(commandQ, queryQ)
-		handler := command.NewCreateTodoHandler(repo)
-
-		id, err := handler.Handle(ctx, command.CreateTodoCommand{Title: "buy milk"})
-		if err != nil {
-			return err
-		}
-		createdID = id
-		return nil
-	})
+	createdID, err := handler.Handle(ctx, command.CreateTodoCommand{Title: "buy milk"})
 	require.NoError(t, err)
-	require.NotEqual(t, uuid.Nil, createdID)
+	require.NotEmpty(t, createdID)
 
+	txManager := db.NewTxManager(ConnectionPool)
 	err = txManager.WithinTransactionReadonly(ctx, TenantSchema, func(queryQ *querydb.Queries) error {
 		repo := tenantrepo.NewTodoRepository(nil, queryQ)
 
@@ -52,27 +39,12 @@ func TestCreateTodoHandler_Handle(t *testing.T) {
 func TestCompleteTodoHandler_Handle(t *testing.T) {
 	ctx := context.Background()
 	txManager := db.NewTxManager(ConnectionPool)
+	uow := tenantrepo.NewTodoUnitOfWork(txManager, TenantSchema)
 
-	var id uuid.UUID
-
-	err := txManager.WithinTransaction(ctx, TenantSchema, func(commandQ *commanddb.Queries) error {
-		queryQ := querydb.New(commandQ.DB())
-		repo := tenantrepo.NewTodoRepository(commandQ, queryQ)
-		handler := command.NewCreateTodoHandler(repo)
-
-		var err error
-		id, err = handler.Handle(ctx, command.CreateTodoCommand{Title: "read a book"})
-		return err
-	})
+	id, err := command.NewCreateTodoHandler(uow).Handle(ctx, command.CreateTodoCommand{Title: "read a book"})
 	require.NoError(t, err)
 
-	err = txManager.WithinTransaction(ctx, TenantSchema, func(commandQ *commanddb.Queries) error {
-		queryQ := querydb.New(commandQ.DB())
-		repo := tenantrepo.NewTodoRepository(commandQ, queryQ)
-		handler := command.NewCompleteTodoHandler(repo)
-
-		return handler.Handle(ctx, command.CompleteTodoCommand{ID: id})
-	})
+	err = command.NewCompleteTodoHandler(uow).Handle(ctx, command.CompleteTodoCommand{ID: id})
 	require.NoError(t, err)
 
 	err = txManager.WithinTransactionReadonly(ctx, TenantSchema, func(queryQ *querydb.Queries) error {
@@ -90,27 +62,12 @@ func TestCompleteTodoHandler_Handle(t *testing.T) {
 func TestDeleteTodoHandler_Handle(t *testing.T) {
 	ctx := context.Background()
 	txManager := db.NewTxManager(ConnectionPool)
+	uow := tenantrepo.NewTodoUnitOfWork(txManager, TenantSchema)
 
-	var id uuid.UUID
-
-	err := txManager.WithinTransaction(ctx, TenantSchema, func(commandQ *commanddb.Queries) error {
-		queryQ := querydb.New(commandQ.DB())
-		repo := tenantrepo.NewTodoRepository(commandQ, queryQ)
-		handler := command.NewCreateTodoHandler(repo)
-
-		var err error
-		id, err = handler.Handle(ctx, command.CreateTodoCommand{Title: "write tests"})
-		return err
-	})
+	id, err := command.NewCreateTodoHandler(uow).Handle(ctx, command.CreateTodoCommand{Title: "write tests"})
 	require.NoError(t, err)
 
-	err = txManager.WithinTransaction(ctx, TenantSchema, func(commandQ *commanddb.Queries) error {
-		queryQ := querydb.New(commandQ.DB())
-		repo := tenantrepo.NewTodoRepository(commandQ, queryQ)
-		handler := command.NewDeleteTodoHandler(repo)
-
-		return handler.Handle(ctx, command.DeleteTodoCommand{ID: id})
-	})
+	err = command.NewDeleteTodoHandler(uow).Handle(ctx, command.DeleteTodoCommand{ID: id})
 	require.NoError(t, err)
 
 	err = txManager.WithinTransactionReadonly(ctx, TenantSchema, func(queryQ *querydb.Queries) error {

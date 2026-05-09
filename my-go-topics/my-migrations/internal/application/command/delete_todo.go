@@ -13,11 +13,11 @@ type DeleteTodoCommand struct {
 }
 
 type DeleteTodoHandler struct {
-	repo todo.Repository
+	uow todo.UnitOfWork
 }
 
-func NewDeleteTodoHandler(repo todo.Repository) *DeleteTodoHandler {
-	return &DeleteTodoHandler{repo: repo}
+func NewDeleteTodoHandler(uow todo.UnitOfWork) *DeleteTodoHandler {
+	return &DeleteTodoHandler{uow: uow}
 }
 
 func (h *DeleteTodoHandler) Handle(
@@ -25,5 +25,7 @@ func (h *DeleteTodoHandler) Handle(
 	cmd DeleteTodoCommand,
 ) error {
 
-	return h.repo.Delete(ctx, cmd.ID)
+	return h.uow.Execute(ctx, func(repo todo.Repository) error {
+		return repo.Delete(ctx, cmd.ID)
+	})
 }

@@ -13,11 +13,11 @@ type CompleteTodoCommand struct {
 }
 
 type CompleteTodoHandler struct {
-	repo todo.Repository
+	uow todo.UnitOfWork
 }
 
-func NewCompleteTodoHandler(repo todo.Repository) *CompleteTodoHandler {
-	return &CompleteTodoHandler{repo: repo}
+func NewCompleteTodoHandler(uow todo.UnitOfWork) *CompleteTodoHandler {
+	return &CompleteTodoHandler{uow: uow}
 }
 
 func (h *CompleteTodoHandler) Handle(
@@ -25,5 +25,7 @@ func (h *CompleteTodoHandler) Handle(
 	cmd CompleteTodoCommand,
 ) error {
 
-	return h.repo.Complete(ctx, cmd.ID)
+	return h.uow.Execute(ctx, func(repo todo.Repository) error {
+		return repo.Complete(ctx, cmd.ID)
+	})
 }

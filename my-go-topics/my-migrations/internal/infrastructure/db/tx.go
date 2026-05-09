@@ -92,6 +92,52 @@ func validateSchemaName(schema string) error {
 	return nil
 }
 
+func (m *TxManager) WithinPublicTransaction(
+	ctx context.Context,
+	fn func(q *commanddb.Queries) error,
+) error {
+
+	tx, err := m.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin public tx: %w", err)
+	}
+
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	q := commanddb.New(tx)
+
+	if err := fn(q); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit public tx: %w", err)
+	}
+
+	return nil
+}
+
+func (m *TxManager) WithinPublicTransactionReadonly(
+	ctx context.Context,
+	fn func(q *querydb.Queries) error,
+) error {
+
+	tx, err := m.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return fmt.Errorf("begin public readonly tx: %w", err)
+	}
+
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	q := querydb.New(tx)
+
+	return fn(q)
+}
+
 /*
 Transaction manager only for queryies.
 Read only transaction - less blocking (?)
