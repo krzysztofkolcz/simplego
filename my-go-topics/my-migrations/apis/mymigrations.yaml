@@ -1,0 +1,392 @@
+openapi: 3.0.3
+
+info:
+  title: My Migrations API
+  version: 1.0.0
+
+servers:
+  - url: "http://localhost:8080/v1"
+    description: Local development
+
+# Tenant context is passed via header on all /todos endpoints.
+# X-Tenant-ID maps to the PostgreSQL schema for that tenant.
+
+paths:
+
+  # ── Tenants ────────────────────────────────────────────────────────────────
+
+  /tenants:
+    post:
+      operationId: createTenant
+      summary: Create a new tenant
+      tags: [tenants]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTenantRequest"
+      responses:
+        "201":
+          description: Tenant created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedResponse"
+        "400":
+          $ref: "#/components/responses/400"
+        "409":
+          $ref: "#/components/responses/409"
+        "500":
+          $ref: "#/components/responses/500"
+
+  /tenants/{id}:
+    get:
+      operationId: getTenant
+      summary: Get a tenant by ID
+      tags: [tenants]
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Tenant found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+        "404":
+          $ref: "#/components/responses/404"
+        "500":
+          $ref: "#/components/responses/500"
+
+  # ── Users ──────────────────────────────────────────────────────────────────
+
+  /users:
+    post:
+      operationId: createUser
+      summary: Create a new user
+      tags: [users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedResponse"
+        "400":
+          $ref: "#/components/responses/400"
+        "409":
+          $ref: "#/components/responses/409"
+        "500":
+          $ref: "#/components/responses/500"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      summary: Get a user by ID
+      tags: [users]
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          $ref: "#/components/responses/404"
+        "500":
+          $ref: "#/components/responses/500"
+
+  # ── Todos (tenant-scoped) ──────────────────────────────────────────────────
+
+  /todos:
+    post:
+      operationId: createTodo
+      summary: Create a new todo
+      tags: [todos]
+      parameters:
+        - $ref: "#/components/parameters/XTenantID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTodoRequest"
+      responses:
+        "201":
+          description: Todo created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedResponse"
+        "400":
+          $ref: "#/components/responses/400"
+        "500":
+          $ref: "#/components/responses/500"
+
+  /todos/{id}:
+    get:
+      operationId: getTodo
+      summary: Get a todo by ID
+      tags: [todos]
+      parameters:
+        - $ref: "#/components/parameters/XTenantID"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Todo found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Todo"
+        "404":
+          $ref: "#/components/responses/404"
+        "500":
+          $ref: "#/components/responses/500"
+
+    delete:
+      operationId: deleteTodo
+      summary: Delete a todo
+      tags: [todos]
+      parameters:
+        - $ref: "#/components/parameters/XTenantID"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "204":
+          description: Todo deleted
+        "404":
+          $ref: "#/components/responses/404"
+        "500":
+          $ref: "#/components/responses/500"
+
+  /todos/{id}/complete:
+    put:
+      operationId: completeTodo
+      summary: Mark a todo as completed
+      tags: [todos]
+      parameters:
+        - $ref: "#/components/parameters/XTenantID"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "204":
+          description: Todo marked as completed
+        "404":
+          $ref: "#/components/responses/404"
+        "500":
+          $ref: "#/components/responses/500"
+
+components:
+
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    XTenantID:
+      name: X-Tenant-ID
+      in: header
+      required: true
+      description: Tenant identifier — maps to the PostgreSQL schema for this tenant
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+
+    # ── Requests ──────────────────────────────────────────────────────────────
+
+    CreateTenantRequest:
+      type: object
+      required: [schema_name]
+      properties:
+        schema_name:
+          type: string
+          example: acme
+
+    CreateUserRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+
+    CreateTodoRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          example: Buy milk
+
+    # ── Responses ─────────────────────────────────────────────────────────────
+
+    CreatedResponse:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          format: uuid
+
+    Tenant:
+      type: object
+      required: [id, schema_name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        schema_name:
+          type: string
+          example: acme
+        migration_status:
+          type: string
+          example: success
+        migration_error:
+          type: string
+          example: ""
+        migration_updated:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    User:
+      type: object
+      required: [id, email]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+          example: user@example.com
+
+    Todo:
+      type: object
+      required: [id, title, completed]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          example: Buy milk
+        completed:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    # ── Errors ────────────────────────────────────────────────────────────────
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: NOT_FOUND
+        message:
+          type: string
+          example: Resource not found
+        context:
+          type: object
+
+    DetailedError:
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/Error"
+        - type: object
+          required: [status]
+          properties:
+            status:
+              type: integer
+            request_id:
+              type: string
+              format: uuid
+            target:
+              type: string
+            details:
+              type: array
+              items:
+                $ref: "#/components/schemas/Error"
+
+    ErrorMessage:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: "#/components/schemas/DetailedError"
+
+  responses:
+    "400":
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorMessage"
+          examples:
+            response:
+              value:
+                error:
+                  status: 400
+                  code: BAD_REQUEST
+                  message: Request body not compliant with specification
+
+    "404":
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorMessage"
+          examples:
+            response:
+              value:
+                error:
+                  status: 404
+                  code: NOT_FOUND
+                  message: Resource not found
+
+    "409":
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorMessage"
+          examples:
+            response:
+              value:
+                error:
+                  status: 409
+                  code: CONFLICT
+                  message: Resource already exists
+
+    "500":
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorMessage"
+          examples:
+            response:
+              value:
+                error:
+                  status: 500
+                  code: INTERNAL_SERVER_ERROR
+                  message: Internal server error

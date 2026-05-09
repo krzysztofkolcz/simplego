@@ -143,3 +143,8 @@ sqlc-generate:
 
 docker-host-mackbook:
 	export DOCKER_HOST=unix:///Users/C5383717/.colima/default/docker.sock
+
+
+
+codegen:
+	oapi-codegen --config=./apis/mymigrations/config.yaml ./apis/mymigrations/mymigrations.yaml

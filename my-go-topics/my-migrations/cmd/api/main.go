@@ -1,41 +1,96 @@
-package api
+package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
+	"github.com/krzysztofkolcz/mymigrations/internal/http/handler"
+	"github.com/krzysztofkolcz/mymigrations/internal/http/router"
 	slogctx "github.com/veqryn/slog-context"
 )
 
+const (
+	readHeaderTimeout = 5 * time.Second
+	readTimeout       = 10 * time.Second
+	writeTimeout      = 10 * time.Second
+	idleTimeout       = 120 * time.Second
+	shutdownTimeout   = 30 * time.Second
+)
+
 func main() {
-	 ctx := context.Background()
-	slogHandler := slogctx.NewHandler(
-		slog.NewJSONHandler(os.Stdout, nil),
-		nil,
-	)
+	// Logger
+	slogHandler := slogctx.NewHandler(slog.NewJSONHandler(os.Stdout, nil), nil)
 	logger := slog.New(slogHandler)
-	pool, err := db.NewPool(
-		ctx,
-		db.Config{
-			DatabaseURL: os.Getenv("DATABASE_URL"),
+	slog.SetDefault(logger)
 
-			MaxConns: 20,
-			MinConns: 5,
-
-			MaxConnLifetime: time.Hour,
-			MaxConnIdleTime: 30 * time.Minute,
-
-			HealthCheckPeriod: time.Minute,
-		},
-		logger,
+	ctx, stop := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGTERM,
+		syscall.SIGINT,
 	)
+	defer stop()
+
+	// Database pool
+	pool, err := db.NewPool(ctx, db.Config{
+		DatabaseURL:       os.Getenv("DATABASE_URL"),
+		MaxConns:          20,
+		MinConns:          5,
+		MaxConnLifetime:   time.Hour,
+		MaxConnIdleTime:   30 * time.Minute,
+		HealthCheckPeriod: time.Minute,
+	}, logger)
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	defer pool.Close()
+
+	// Wiring
+	txManager := db.NewTxManager(pool)
+	srv := handler.NewServer(txManager, pool)
+	httpHandler := router.New(srv)
+
+	// HTTP server
+	addr := os.Getenv("HTTP_ADDR")
+	if addr == "" {
+		addr = ":8080"
+	}
+
+	httpServer := &http.Server{
+		Addr:              addr,
+		Handler:           httpHandler,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
+	}
+
+	// Start
+	go func() {
+		logger.Info("server starting", "addr", addr)
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatal(err)
+		}
+	}()
+
+	// Wait for signal
+	<-ctx.Done()
+	stop()
+	logger.Info("shutting down")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		log.Fatal(err)
+	}
+
+	logger.Info("shutdown complete")
 }
