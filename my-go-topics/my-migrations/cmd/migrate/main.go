@@ -79,7 +79,7 @@ func runMigrate(ctx context.Context, pool *pgxpool.Pool,sqlDb *sql.DB, dsn strin
 	}
 
 	tenantID := uuid.New().String()
-	 db.CreateTenant(ctx, pool, dsn, tenantID, logger)
+	 db.CreateTenant(ctx, pool, tenantID, logger)
 
 	return db.MigrateAllTenants(ctx, pool, sqlDb, dsn, logger)
 }

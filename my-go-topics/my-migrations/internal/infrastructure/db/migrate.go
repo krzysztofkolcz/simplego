@@ -49,7 +49,7 @@ func MigratePublic(ctx context.Context, dsn string, logger *slog.Logger) error {
 
 func MigrateAllTenants(ctx context.Context, pool *pgxpool.Pool, sqlDb *sql.DB, dsn string, logger *slog.Logger) error {
 	var failed []string
-	rows, err := pool.Query(ctx, `SELECT id, schema_name FROM tenants`)
+	rows, err := pool.Query(ctx, `SELECT id, schema_name FROM public.tenants`)
 	if err != nil {
 		return err
 	}
@@ -62,7 +62,7 @@ func MigrateAllTenants(ctx context.Context, pool *pgxpool.Pool, sqlDb *sql.DB, d
 			return err
 		}
 
-		if err := MigrateSingleTenantWrapper(ctx, sqlDb, dsn, id, schema, logger); err != nil {
+		if err := MigrateSingleTenantWrapper(ctx, sqlDb, id, schema, logger); err != nil {
 			logger.ErrorContext(ctx, "migrate tenant failed", "schema", schema, "err", err)
 			failed = append(failed, schema)
 		}
@@ -79,7 +79,7 @@ func MigrateAllTenants(ctx context.Context, pool *pgxpool.Pool, sqlDb *sql.DB, d
 	return nil
 }
 
-func CreateTenant(ctx context.Context, pool *pgxpool.Pool, dsn, tenantID string, logger *slog.Logger) error {
+func CreateTenant(ctx context.Context, pool *pgxpool.Pool, tenantID string, logger *slog.Logger) error {
 	schema := CreateSchemaName(tenantID)
 
 	tx, err := pool.Begin(ctx)
@@ -93,7 +93,7 @@ func CreateTenant(ctx context.Context, pool *pgxpool.Pool, dsn, tenantID string,
 	}
 
 	if _, err := tx.Exec(ctx,
-		`INSERT INTO tenants (id, schema_name) VALUES ($1, $2)`,
+		`INSERT INTO public.tenants (id, schema_name) VALUES ($1, $2)`,
 		tenantID,
 		schema,
 	); err != nil {
@@ -163,7 +163,7 @@ func MigrateTenant(
 func MigrateSingleTenantWrapper(
 	ctx context.Context,
 	sqlDb *sql.DB,
-	dsn, tenantID, schema string,
+	tenantID, schema string,
 	logger *slog.Logger,
 ) error {
 
@@ -225,4 +225,56 @@ func MigrateSingleTenantWrapper(
 	logger.Info("tenant success", "schema", schema)
 
 	return nil
+}
+
+/*
+Unused
+*/
+
+func MigrateAllTenantsConcurrent(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	sqlDb *sql.DB,
+	logger *slog.Logger,
+) error {
+
+	rows, err := pool.Query(ctx, `SELECT schema_name FROM tenants`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	jobs := make(chan string)
+	errs := make(chan error, 10)
+
+	workerCount := 5
+
+	// workers
+	for i := 0; i < workerCount; i++ {
+		go func() {
+			for schema := range jobs {
+				if err := MigrateTenant(ctx, sqlDb, schema, logger); err != nil {
+					errs <- fmt.Errorf("%s: %w", schema, err)
+				}
+			}
+		}()
+	}
+
+	// producer
+	for rows.Next() {
+		var schema string
+		if err := rows.Scan(&schema); err != nil {
+			return err
+		}
+		jobs <- schema
+	}
+	close(jobs)
+
+	// wait / errors
+	select {
+	case err := <-errs:
+		return err
+	default:
+		return nil
+	}
 }

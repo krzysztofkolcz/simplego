@@ -10,6 +10,12 @@ linters:
     - revive
     - errcheck
     - ineffassign
+    - unused
+    - gosimple
+
+issues:
+  exclude-dirs:
+    - vendor
 
 formatters:
   enable:

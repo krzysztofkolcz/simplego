@@ -41,7 +41,12 @@ func TestTenantMigrations(t *testing.T) {
 	))
 
 	// tworzymy tenant + migracje
-	err := db.CreateTenant(ctx, ConnectionPool, TestDsn, tenantID, logger)
+	err := db.CreateTenant(ctx, ConnectionPool, tenantID, logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = db.MigrateAllTenants(ctx, ConnectionPool, SqlDb, TestDsn, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +68,12 @@ func TestTenantTableWorks(t *testing.T) {
 	tenantID := uuid.New().String()
 	schema := db.CreateSchemaName(tenantID)
 
-	err := db.CreateTenant(ctx, ConnectionPool, TestDsn, tenantID, logger)
+	err := db.CreateTenant(ctx, ConnectionPool, tenantID, logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = db.MigrateAllTenants(ctx, ConnectionPool, SqlDb, TestDsn, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +104,7 @@ func TestMigrationsIdempotency(t *testing.T) {
 	require.NoError(t, db.MigratePublic(ctx, TestDsn, logger))
 
 	tenantID := uuid.New().String()
-	require.NoError(t, db.CreateTenant(ctx, ConnectionPool, TestDsn, tenantID, logger))
+	require.NoError(t, db.CreateTenant(ctx, ConnectionPool, tenantID, logger))
 
 	// 🔁 uruchamiamy wielokrotnie
 	// jeśli coś by się wysypało (duplikaty, konflikty), test padnie

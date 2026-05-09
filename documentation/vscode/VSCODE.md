@@ -7,6 +7,49 @@ Kursor ustawiam pomiędzy {}
 Windos/Linux: Ctrl + .  -> wybieram z menu 'Fill Struct' (niby plugin gopls)
 Mac: command + .
 
+# Pluginy
+ext install usernamehw.errorlens
+
+# Konfiguracja Formatowanie Golang
+Go extension for VS Code
+go install golang.org/x/tools/cmd/goimports@latest
+go install golang.org/x/tools/gopls@latest
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+echo 'export PATH=$PATH:$HOME/go/bin' >> ~/.bashrc
+source ~/.bashrc
+
+goimports -version
+gopls version
+golangci-lint --version
+
+Ctrl + Shift + P
+Preferences: Open User Settings (JSON)
+
+```
+{
+  "[go]": {
+    "editor.defaultFormatter": "golang.Go",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+
+  "go.formatTool": "goimports",
+
+  "go.useLanguageServer": true,
+
+  "go.lintTool": "golangci-lint",
+  "go.lintOnSave": "package",
+
+  "gopls": {
+    "ui.semanticTokens": true,
+    "staticcheck": true,
+    "gofumpt": true
+  }
+}
+```
+# Formatowanie Ctrl + Shift + i
 # Wyszukiwanie Ctrl + Shift + f
 
 Windows/Linux: Ctrl + Shift + F

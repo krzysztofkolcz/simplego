@@ -48,6 +48,14 @@ func TestMain(m *testing.M) {
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections"),
 		),
+		/*
+			postgres.WithWaitStrategy(
+				wait.ForAll(
+					wait.ForListeningPort("5432/tcp"),
+					wait.ForLog("database system is ready to accept connections"),
+				),
+			)
+		*/
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -87,7 +95,7 @@ func TestMain(m *testing.M) {
 
 	TenantId = uuid.New().String()
 	TenantSchema = db.CreateSchemaName(TenantId)
-	if err := db.CreateTenant(ctx, ConnectionPool, TestDsn, TenantId, logger); err != nil {
+	if err := db.CreateTenant(ctx, ConnectionPool, TenantId, logger); err != nil {
 		log.Fatal(err)
 	}
 
