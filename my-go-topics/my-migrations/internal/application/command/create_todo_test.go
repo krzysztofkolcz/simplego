@@ -7,11 +7,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+
+	testhelpers "github.com/krzysztofkolcz/mymigrations/internal/testhelpers"
 )
 
 func TestCreateTodoHandler_Handle_ReturnsValidID(t *testing.T) {
-	repo := &fakeTodoRepo{}
-	handler := NewCreateTodoHandler(&fakeTodoUoW{repo: repo})
+	repo := &testhelpers.FakeTodoRepo{}
+	handler := NewCreateTodoHandler(&testhelpers.FakeTodoUoW{Repo: repo})
 
 	id, err := handler.Handle(context.Background(), CreateTodoCommand{Title: "buy milk"})
 
@@ -20,19 +22,19 @@ func TestCreateTodoHandler_Handle_ReturnsValidID(t *testing.T) {
 }
 
 func TestCreateTodoHandler_Handle_StoresTodo(t *testing.T) {
-	repo := &fakeTodoRepo{}
-	handler := NewCreateTodoHandler(&fakeTodoUoW{repo: repo})
+	repo := &testhelpers.FakeTodoRepo{}
+	handler := NewCreateTodoHandler(&testhelpers.FakeTodoUoW{Repo: repo})
 
 	id, _ := handler.Handle(context.Background(), CreateTodoCommand{Title: "buy milk"})
 
-	require.Len(t, repo.created, 1)
-	require.Equal(t, id, repo.created[0].ID)
-	require.Equal(t, "buy milk", repo.created[0].Title)
+	require.Len(t, repo.Created, 1)
+	require.Equal(t, id, repo.Created[0].ID)
+	require.Equal(t, "buy milk", repo.Created[0].Title)
 }
 
 func TestCreateTodoHandler_Handle_RepoError(t *testing.T) {
-	repo := &fakeTodoRepo{err: errors.New("db down")}
-	handler := NewCreateTodoHandler(&fakeTodoUoW{repo: repo})
+	repo := &testhelpers.FakeTodoRepo{Err: errors.New("db down")}
+	handler := NewCreateTodoHandler(&testhelpers.FakeTodoUoW{Repo: repo})
 
 	_, err := handler.Handle(context.Background(), CreateTodoCommand{Title: "buy milk"})
 
@@ -40,7 +42,7 @@ func TestCreateTodoHandler_Handle_RepoError(t *testing.T) {
 }
 
 func TestCreateTodoHandler_Handle_UoWError(t *testing.T) {
-	handler := NewCreateTodoHandler(&fakeTodoUoW{err: errors.New("tx failed")})
+	handler := NewCreateTodoHandler(&testhelpers.FakeTodoUoW{Err: errors.New("tx failed")})
 
 	_, err := handler.Handle(context.Background(), CreateTodoCommand{Title: "buy milk"})
 
