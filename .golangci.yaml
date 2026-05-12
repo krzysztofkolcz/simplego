@@ -1,21 +1,56 @@
 version: "2"
 
 run:
-  timeout: 3m
+  timeout: 5m
+  tests: true
 
 linters:
   enable:
-    - govet
-    - staticcheck
-    - revive
+    # podstawowe
     - errcheck
+    - govet
     - ineffassign
+    - revive
+    - staticcheck
     - unused
     - gosimple
 
-issues:
-  exclude-dirs:
-    - vendor
+    # dodatkowe backendowe
+    - gocritic
+    - bodyclose
+    - sqlclosecheck
+    - nilerr
+    - contextcheck
+    - rowserrcheck
+
+  settings:
+    revive:
+      severity: warning
+      rules:
+        - name: exported
+        - name: unused-parameter
+          disabled: true
+
+    gocritic:
+      enabled-checks:
+        - appendAssign
+        - argOrder
+        - badLock
+        - badRegexp
+        - boolExprSimplify
+        - builtinShadow
+        - dupImport
+        - emptyFallthrough
+        - hugeParam
+        - ifElseChain
+        - mapKey
+        - offBy1
+        - regexpMust
+        - sloppyReassign
+        - sqlQuery
+        - typeSwitchVar
+        - unnecessaryBlock
+        - weakCond
 
 formatters:
   enable:
@@ -23,17 +58,13 @@ formatters:
     - goimports
     - gci
 
-linters-settings:
-  revive:
-    severity: warning
-    rules:
-      - name: exported
-        severity: warning
-      - name: unused-parameter
-        disabled: true
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - localmodule
 
-gci:
-  sections:
-    - standard
-    - default
-    - localmodule
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

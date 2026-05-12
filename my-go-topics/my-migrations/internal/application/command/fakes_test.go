@@ -59,6 +59,13 @@ func (f *fakeTodoRepo) Delete(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
+func (f *fakeTodoRepo) List(_ context.Context) ([]todo.Todo, error){
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.created, nil
+}
+
 // ── User ──────────────────────────────────────────────────────────────────────
 
 type fakeUserUoW struct {

@@ -75,3 +75,24 @@ func (r *TodoRepository) Delete(
 
 	return r.commandQ.DeleteTodo(ctx, id)
 }
+
+func (r *TodoRepository) List(
+	ctx context.Context,
+) ([]todo.Todo, error) {
+	todos, err := r.queryQ.ListTodos(ctx)
+	if err != nil {
+		return nil, err 
+	}
+	response := []todo.Todo{}
+	for _, t := range todos {
+		res := todo.Todo{
+			ID:        t.ID,
+			Title:     t.Title,
+			Completed: t.Completed,
+			CreatedAt: t.CreatedAt.Time,
+		}
+		response = append(response, res)
+	}
+
+	return response, nil
+}

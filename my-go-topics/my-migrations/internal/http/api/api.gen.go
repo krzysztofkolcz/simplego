@@ -85,6 +85,9 @@ type Todo struct {
 	Title     string             `json:"title"`
 }
 
+// TodoList defines model for TodoList.
+type TodoList = []Todo
+
 // User defines model for User.
 type User struct {
 	Email openapi_types.Email `json:"email"`
@@ -108,6 +111,12 @@ type N409 = ErrorMessage
 
 // N500 defines model for 500.
 type N500 = ErrorMessage
+
+// ListTodosParams defines parameters for ListTodos.
+type ListTodosParams struct {
+	// XTenantID Tenant identifier — maps to the PostgreSQL schema for this tenant
+	XTenantID XTenantID `json:"X-Tenant-ID"`
+}
 
 // CreateTodoParams defines parameters for CreateTodo.
 type CreateTodoParams struct {
@@ -150,6 +159,9 @@ type ServerInterface interface {
 	// Get a tenant by ID
 	// (GET /tenants/{id})
 	GetTenant(w http.ResponseWriter, r *http.Request, id ID)
+	// list todos
+	// (GET /todos)
+	ListTodos(w http.ResponseWriter, r *http.Request, params ListTodosParams)
 	// Create a new todo
 	// (POST /todos)
 	CreateTodo(w http.ResponseWriter, r *http.Request, params CreateTodoParams)
@@ -209,6 +221,50 @@ func (siw *ServerInterfaceWrapper) GetTenant(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetTenant(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTodos operation middleware
+func (siw *ServerInterfaceWrapper) ListTodos(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListTodosParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Tenant-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Tenant-ID")]; found {
+		var XTenantID XTenantID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Tenant-ID", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Tenant-ID", valueList[0], &XTenantID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Tenant-ID", Err: err})
+			return
+		}
+
+		params.XTenantID = XTenantID
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Tenant-ID is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Tenant-ID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTodos(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -582,6 +638,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc("POST "+options.BaseURL+"/tenants", wrapper.CreateTenant)
 	m.HandleFunc("GET "+options.BaseURL+"/tenants/{id}", wrapper.GetTenant)
+	m.HandleFunc("GET "+options.BaseURL+"/todos", wrapper.ListTodos)
 	m.HandleFunc("POST "+options.BaseURL+"/todos", wrapper.CreateTodo)
 	m.HandleFunc("DELETE "+options.BaseURL+"/todos/{id}", wrapper.DeleteTodo)
 	m.HandleFunc("GET "+options.BaseURL+"/todos/{id}", wrapper.GetTodo)
@@ -673,6 +730,41 @@ func (response GetTenant404JSONResponse) VisitGetTenantResponse(w http.ResponseW
 type GetTenant500JSONResponse struct{ N500JSONResponse }
 
 func (response GetTenant500JSONResponse) VisitGetTenantResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListTodosRequestObject struct {
+	Params ListTodosParams
+}
+
+type ListTodosResponseObject interface {
+	VisitListTodosResponse(w http.ResponseWriter) error
+}
+
+type ListTodos200JSONResponse TodoList
+
+func (response ListTodos200JSONResponse) VisitListTodosResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListTodos400JSONResponse struct{ N400JSONResponse }
+
+func (response ListTodos400JSONResponse) VisitListTodosResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListTodos500JSONResponse struct{ N500JSONResponse }
+
+func (response ListTodos500JSONResponse) VisitListTodosResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
 
@@ -908,6 +1000,9 @@ type StrictServerInterface interface {
 	// Get a tenant by ID
 	// (GET /tenants/{id})
 	GetTenant(ctx context.Context, request GetTenantRequestObject) (GetTenantResponseObject, error)
+	// list todos
+	// (GET /todos)
+	ListTodos(ctx context.Context, request ListTodosRequestObject) (ListTodosResponseObject, error)
 	// Create a new todo
 	// (POST /todos)
 	CreateTodo(ctx context.Context, request CreateTodoRequestObject) (CreateTodoResponseObject, error)
@@ -1007,6 +1102,32 @@ func (sh *strictHandler) GetTenant(w http.ResponseWriter, r *http.Request, id ID
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetTenantResponseObject); ok {
 		if err := validResponse.VisitGetTenantResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListTodos operation middleware
+func (sh *strictHandler) ListTodos(w http.ResponseWriter, r *http.Request, params ListTodosParams) {
+	var request ListTodosRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTodos(ctx, request.(ListTodosRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTodos")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTodosResponseObject); ok {
+		if err := validResponse.VisitListTodosResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -1188,28 +1309,29 @@ func (sh *strictHandler) GetUser(w http.ResponseWriter, r *http.Request, id ID) 
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
+	"OMbZbfZfAAAA//+VaIG+FhwAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

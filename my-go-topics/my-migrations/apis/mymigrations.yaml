@@ -131,6 +131,24 @@ paths:
           $ref: "#/components/responses/400"
         "500":
           $ref: "#/components/responses/500"
+    get:
+      operationId: listTodos
+      summary: list todos
+      tags: [todos]
+      parameters:
+        - $ref: "#/components/parameters/XTenantID"
+      responses:
+        "200":
+          description: list todos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TodoList"
+        "400":
+          $ref: "#/components/responses/400"
+        "500":
+          $ref: "#/components/responses/500"
+
 
   /todos/{id}:
     get:
@@ -292,6 +310,12 @@ components:
         created_at:
           type: string
           format: date-time
+    
+    TodoList:
+      type: array
+      items:
+        $ref: "#/components/schemas/Todo"
+
 
     # ── Errors ────────────────────────────────────────────────────────────────
 

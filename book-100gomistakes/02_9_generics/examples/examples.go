@@ -1,3 +1,4 @@
+// Package examples: generic examples
 package examples
 
 import "strconv"
@@ -15,7 +16,7 @@ type CustomConstraint2 interface {
 	String() string
 }
 
-// implements customConstraint2
+// CustomInt implements customConstraint2
 type CustomInt int
 
 func (i CustomInt) String() string {

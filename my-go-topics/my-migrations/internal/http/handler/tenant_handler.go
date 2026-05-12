@@ -8,8 +8,8 @@ import (
 
 	appcommand "github.com/krzysztofkolcz/mymigrations/internal/application/command"
 	appquery "github.com/krzysztofkolcz/mymigrations/internal/application/query"
-	publicrepo "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/repository/public"
 	httpapi "github.com/krzysztofkolcz/mymigrations/internal/http/api"
+	publicrepo "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/repository/public"
 )
 
 func (s *Server) CreateTenant(

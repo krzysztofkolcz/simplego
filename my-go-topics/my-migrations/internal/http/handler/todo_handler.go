@@ -8,9 +8,9 @@ import (
 
 	appcommand "github.com/krzysztofkolcz/mymigrations/internal/application/command"
 	appquery "github.com/krzysztofkolcz/mymigrations/internal/application/query"
+	httpapi "github.com/krzysztofkolcz/mymigrations/internal/http/api"
 	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query"
 	tenantrepo "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/repository/tenant"
-	httpapi "github.com/krzysztofkolcz/mymigrations/internal/http/api"
 )
 
 func (s *Server) CreateTodo(
@@ -98,4 +98,41 @@ func (s *Server) DeleteTodo(
 	}
 
 	return httpapi.DeleteTodo204Response{}, nil
+}
+
+
+func (s *Server) ListTodos(
+	ctx context.Context,
+	req httpapi.ListTodosRequestObject,
+) (httpapi.ListTodosResponseObject, error){
+
+	var list = []appquery.TodoResult{}
+
+	err := s.txManager.WithinTransactionReadonly(
+		ctx,
+		tenantSchema(req.Params.XTenantID),
+		func(q *querydb.Queries) error {
+			var err error
+			repo := tenantrepo.NewTodoRepository(nil, q)
+			list, err = appquery.NewListTodosHandler(repo).Handle(ctx, appquery.ListTodosQuery{})
+			return err
+		},
+	)
+
+	
+	if err != nil {
+		return httpapi.ListTodos500JSONResponse{N500JSONResponse: internalError(err)}, nil
+	}
+
+	var responses = httpapi.ListTodos200JSONResponse{}
+	for _,l:= range list{
+		res := httpapi.Todo{
+			Completed: l.Completed,
+			CreatedAt: nil,
+			Id:        l.ID,
+			Title:     l.Title,
+		}
+		responses = append(responses, res)
+	}
+	return responses, nil
 }

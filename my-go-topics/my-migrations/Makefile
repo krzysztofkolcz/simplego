@@ -147,4 +147,4 @@ docker-host-mackbook:
 
 
 codegen:
-	oapi-codegen --config=./apis/mymigrations/config.yaml ./apis/mymigrations/mymigrations.yaml
+	oapi-codegen --config=./apis/config.yaml ./apis/mymigrations.yaml
