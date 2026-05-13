@@ -4,10 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/jackc/pgx/v5"
-
 	appcommand "github.com/krzysztofkolcz/mymigrations/internal/application/command"
 	appquery "github.com/krzysztofkolcz/mymigrations/internal/application/query"
+	"github.com/krzysztofkolcz/mymigrations/internal/domain"
 	httpapi "github.com/krzysztofkolcz/mymigrations/internal/http/api"
 	publicrepo "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/repository/public"
 )
@@ -38,7 +37,7 @@ func (s *Server) GetTenant(
 		ID: req.Id,
 	})
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return httpapi.GetTenant404JSONResponse{N404JSONResponse: notFoundError()}, nil
 		}
 		return httpapi.GetTenant500JSONResponse{N500JSONResponse: internalError(err)}, nil

@@ -17,10 +17,10 @@ type TodoResult struct {
 }
 
 type ListTodosHandler struct{
-	repo todo.Repository
+	repo todo.ReadRepository
 }
 
-func NewListTodosHandler(repo todo.Repository) *ListTodosHandler {
+func NewListTodosHandler(repo todo.ReadRepository) *ListTodosHandler {
 	return &ListTodosHandler{
 		repo: repo,
 	}

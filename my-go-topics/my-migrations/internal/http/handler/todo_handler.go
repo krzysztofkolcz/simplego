@@ -4,12 +4,10 @@ import (
 	"context"
 	"errors"
 
-	"github.com/jackc/pgx/v5"
-
 	appcommand "github.com/krzysztofkolcz/mymigrations/internal/application/command"
 	appquery "github.com/krzysztofkolcz/mymigrations/internal/application/query"
+	"github.com/krzysztofkolcz/mymigrations/internal/domain"
 	httpapi "github.com/krzysztofkolcz/mymigrations/internal/http/api"
-	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query"
 	tenantrepo "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/repository/tenant"
 )
 
@@ -34,22 +32,12 @@ func (s *Server) GetTodo(
 	req httpapi.GetTodoRequestObject,
 ) (httpapi.GetTodoResponseObject, error) {
 
-	var result *appquery.GetTodoResult
-
-	err := s.txManager.WithinTransactionReadonly(
-		ctx,
-		tenantSchema(req.Params.XTenantID),
-		func(q *querydb.Queries) error {
-			repo := tenantrepo.NewTodoRepository(nil, q)
-			var err error
-			result, err = appquery.NewGetTodoHandler(repo).Handle(ctx, appquery.GetTodoQuery{
-				ID: req.Id,
-			})
-			return err
-		},
-	)
+	repo := tenantrepo.NewTodoReadRepository(s.txManager, tenantSchema(req.Params.XTenantID))
+	result, err := appquery.NewGetTodoHandler(repo).Handle(ctx, appquery.GetTodoQuery{
+		ID: req.Id,
+	})
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return httpapi.GetTodo404JSONResponse{N404JSONResponse: notFoundError()}, nil
 		}
 		return httpapi.GetTodo500JSONResponse{N500JSONResponse: internalError(err)}, nil
@@ -72,7 +60,7 @@ func (s *Server) CompleteTodo(
 		ID: req.Id,
 	})
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return httpapi.CompleteTodo404JSONResponse{N404JSONResponse: notFoundError()}, nil
 		}
 		return httpapi.CompleteTodo500JSONResponse{N500JSONResponse: internalError(err)}, nil
@@ -91,7 +79,7 @@ func (s *Server) DeleteTodo(
 		ID: req.Id,
 	})
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return httpapi.DeleteTodo404JSONResponse{N404JSONResponse: notFoundError()}, nil
 		}
 		return httpapi.DeleteTodo500JSONResponse{N500JSONResponse: internalError(err)}, nil
@@ -104,35 +92,22 @@ func (s *Server) DeleteTodo(
 func (s *Server) ListTodos(
 	ctx context.Context,
 	req httpapi.ListTodosRequestObject,
-) (httpapi.ListTodosResponseObject, error){
+) (httpapi.ListTodosResponseObject, error) {
 
-	var list = []appquery.TodoResult{}
-
-	err := s.txManager.WithinTransactionReadonly(
-		ctx,
-		tenantSchema(req.Params.XTenantID),
-		func(q *querydb.Queries) error {
-			var err error
-			repo := tenantrepo.NewTodoRepository(nil, q)
-			list, err = appquery.NewListTodosHandler(repo).Handle(ctx, appquery.ListTodosQuery{})
-			return err
-		},
-	)
-
-	
+	repo := tenantrepo.NewTodoReadRepository(s.txManager, tenantSchema(req.Params.XTenantID))
+	list, err := appquery.NewListTodosHandler(repo).Handle(ctx, appquery.ListTodosQuery{})
 	if err != nil {
 		return httpapi.ListTodos500JSONResponse{N500JSONResponse: internalError(err)}, nil
 	}
 
 	var responses = httpapi.ListTodos200JSONResponse{}
-	for _,l:= range list{
-		res := httpapi.Todo{
+	for _, l := range list {
+		responses = append(responses, httpapi.Todo{
 			Completed: l.Completed,
 			CreatedAt: nil,
 			Id:        l.ID,
 			Title:     l.Title,
-		}
-		responses = append(responses, res)
+		})
 	}
 	return responses, nil
 }

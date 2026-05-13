@@ -2,9 +2,12 @@ package public
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
+	"github.com/krzysztofkolcz/mymigrations/internal/domain"
 	"github.com/krzysztofkolcz/mymigrations/internal/domain/user"
 	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command"
 	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query"
@@ -49,6 +52,9 @@ func (r *UserRepository) GetByID(
 
 	row, err := r.queryQ.GetUserID(ctx, id)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows){
+			return nil, domain.ErrNotFound
+		}
 		return nil, err
 	}
 

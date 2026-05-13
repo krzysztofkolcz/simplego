@@ -8,8 +8,8 @@ import (
 
 type Repository interface {
 	Create(ctx context.Context, todo Todo) error
-	GetByID(ctx context.Context, id uuid.UUID) (*Todo, error)
+	// GetByID(ctx context.Context, id uuid.UUID) (*Todo, error)
 	Complete(ctx context.Context, id uuid.UUID) error
 	Delete(ctx context.Context, id uuid.UUID) error
-	List (ctx context.Context) ([]Todo, error)
+	// List (ctx context.Context) ([]Todo, error)
 }

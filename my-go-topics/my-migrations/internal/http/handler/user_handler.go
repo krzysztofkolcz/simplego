@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 
-	"github.com/jackc/pgx/v5"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	appcommand "github.com/krzysztofkolcz/mymigrations/internal/application/command"
 	appquery "github.com/krzysztofkolcz/mymigrations/internal/application/query"
-	publicrepo "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/repository/public"
+	"github.com/krzysztofkolcz/mymigrations/internal/domain"
 	httpapi "github.com/krzysztofkolcz/mymigrations/internal/http/api"
+	publicrepo "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/repository/public"
 )
 
 func (s *Server) CreateUser(
@@ -39,7 +39,7 @@ func (s *Server) GetUser(
 		ID: req.Id,
 	})
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return httpapi.GetUser404JSONResponse{N404JSONResponse: notFoundError()}, nil
 		}
 		return httpapi.GetUser500JSONResponse{N500JSONResponse: internalError(err)}, nil

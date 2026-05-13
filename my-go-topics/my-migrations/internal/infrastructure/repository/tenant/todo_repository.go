@@ -2,9 +2,12 @@ package repository
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
+	"github.com/krzysztofkolcz/mymigrations/internal/domain"
 	"github.com/krzysztofkolcz/mymigrations/internal/domain/todo"
 	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command"
 	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query"
@@ -49,6 +52,9 @@ func (r *TodoRepository) GetByID(
 
 	row, err := r.queryQ.GetTodo(ctx, id)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows){
+			return nil, domain.ErrNotFound
+		}
 		return nil, err
 	}
 
@@ -65,7 +71,11 @@ func (r *TodoRepository) Complete(
 	id uuid.UUID,
 ) error {
 
-	return r.commandQ.CompleteTodo(ctx, id)
+	err := r.commandQ.CompleteTodo(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows){
+		return domain.ErrNotFound
+	}
+	return err
 }
 
 func (r *TodoRepository) Delete(
@@ -73,7 +83,11 @@ func (r *TodoRepository) Delete(
 	id uuid.UUID,
 ) error {
 
-	return r.commandQ.DeleteTodo(ctx, id)
+	err := r.commandQ.DeleteTodo(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows){
+		return domain.ErrNotFound
+	}
+	return err
 }
 
 func (r *TodoRepository) List(

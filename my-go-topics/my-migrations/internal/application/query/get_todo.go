@@ -19,10 +19,10 @@ type GetTodoResult struct {
 }
 
 type GetTodoHandler struct {
-	repo todo.Repository
+	repo todo.ReadRepository
 }
 
-func NewGetTodoHandler(repo todo.Repository) *GetTodoHandler {
+func NewGetTodoHandler(repo todo.ReadRepository) *GetTodoHandler {
 	return &GetTodoHandler{repo: repo}
 }
 
