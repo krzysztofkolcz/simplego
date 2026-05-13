@@ -2,6 +2,7 @@ package query
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/krzysztofkolcz/mymigrations/internal/domain/todo"
@@ -14,6 +15,7 @@ type TodoResult struct {
 	ID        uuid.UUID
 	Title     string
 	Completed bool
+	CreatedAt time.Time
 }
 
 type ListTodosHandler struct{
@@ -39,6 +41,7 @@ func (h *ListTodosHandler) Handle(ctx context.Context, query ListTodosQuery) ([]
 			ID:        l.ID,
 			Title:     l.Title,
 			Completed: l.Completed,
+			CreatedAt: l.CreatedAt,
 		}
 		response = append(response, res)
 	}

@@ -2,6 +2,7 @@ package query
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -16,6 +17,7 @@ type GetTodoResult struct {
 	ID        uuid.UUID
 	Title     string
 	Completed bool
+	CreatedAt time.Time
 }
 
 type GetTodoHandler struct {
@@ -40,5 +42,6 @@ func (h *GetTodoHandler) Handle(
 		ID:        t.ID,
 		Title:     t.Title,
 		Completed: t.Completed,
+		CreatedAt: t.CreatedAt,
 	}, nil
 }

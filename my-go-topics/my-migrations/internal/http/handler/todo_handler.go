@@ -47,6 +47,7 @@ func (s *Server) GetTodo(
 		Id:        result.ID,
 		Title:     result.Title,
 		Completed: result.Completed,
+		CreatedAt: &result.CreatedAt,
 	}, nil
 }
 
@@ -104,7 +105,7 @@ func (s *Server) ListTodos(
 	for _, l := range list {
 		responses = append(responses, httpapi.Todo{
 			Completed: l.Completed,
-			CreatedAt: nil,
+			CreatedAt: &l.CreatedAt,
 			Id:        l.ID,
 			Title:     l.Title,
 		})
