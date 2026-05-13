@@ -37,6 +37,6 @@ func (h *GetUserHandler) Handle(
 
 	return &GetUserResult{
 		ID:    u.ID,
-		Email: u.Email,
+		Email: u.Email.String(),
 	}, nil
 }

@@ -39,7 +39,7 @@ func (r *UserRepository) Create(
 		ctx,
 		commanddb.CreateUserParams{
 			ID:    u.ID,
-			Email: u.Email,
+			Email: u.Email.String(),
 		},
 	)
 	if err != nil {
@@ -66,8 +66,13 @@ func (r *UserRepository) GetByID(
 		return nil, err
 	}
 
+	email, err := user.NewEmail(row.Email)
+	if err != nil {
+		return nil, err
+	}
+
 	return &user.User{
 		ID:    row.ID,
-		Email: row.Email,
+		Email: email,
 	}, nil
 }

@@ -23,6 +23,9 @@ func (s *Server) CreateUser(
 		Email: string(req.Body.Email),
 	})
 	if err != nil {
+		if errors.Is(err, domain.ErrInvalidEmail) {
+			return httpapi.CreateUser400JSONResponse{N400JSONResponse: badRequestError(err.Error())}, nil
+		}
 		if errors.Is(err, domain.ErrConflict) {
 			return httpapi.CreateUser409JSONResponse{N409JSONResponse: conflictError()}, nil
 		}

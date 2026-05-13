@@ -25,13 +25,15 @@ func (h *CreateUserHandler) Handle(
 	cmd CreateUserCommand,
 ) (uuid.UUID, error) {
 
-	u := user.User{
-		ID:    uuid.New(),
-		Email: cmd.Email,
+	email, err := user.NewEmail(cmd.Email)
+	if err != nil {
+		return uuid.Nil, err
 	}
 
-	err := h.uow.Execute(ctx, func(repo user.Repository) error {
-		return repo.Create(ctx, u)
+	u := user.NewUser(uuid.New(), email)
+
+	err = h.uow.Execute(ctx, func(repo user.Repository) error {
+		return repo.Create(ctx, *u)
 	})
 	if err != nil {
 		return uuid.Nil, err

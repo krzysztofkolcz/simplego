@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/krzysztofkolcz/mymigrations/internal/domain"
 	testhelpers "github.com/krzysztofkolcz/mymigrations/internal/testhelpers"
 )
 
@@ -29,7 +30,25 @@ func TestCreateUserHandler_Handle_StoresUser(t *testing.T) {
 
 	require.Len(t, repo.Created, 1)
 	require.Equal(t, id, repo.Created[0].ID)
-	require.Equal(t, "user@example.com", repo.Created[0].Email)
+	require.Equal(t, "user@example.com", repo.Created[0].Email.String())
+}
+
+func TestCreateUserHandler_Handle_NormalizesEmail(t *testing.T) {
+	repo := &testhelpers.FakeUserRepo{}
+	handler := NewCreateUserHandler(&testhelpers.FakeUserUoW{Repo: repo})
+
+	handler.Handle(context.Background(), CreateUserCommand{Email: "  User@Example.COM  "})
+
+	require.Equal(t, "user@example.com", repo.Created[0].Email.String())
+}
+
+func TestCreateUserHandler_Handle_InvalidEmail(t *testing.T) {
+	repo := &testhelpers.FakeUserRepo{}
+	handler := NewCreateUserHandler(&testhelpers.FakeUserUoW{Repo: repo})
+
+	_, err := handler.Handle(context.Background(), CreateUserCommand{Email: "notanemail"})
+
+	require.ErrorIs(t, err, domain.ErrInvalidEmail)
 }
 
 func TestCreateUserHandler_Handle_RepoError(t *testing.T) {

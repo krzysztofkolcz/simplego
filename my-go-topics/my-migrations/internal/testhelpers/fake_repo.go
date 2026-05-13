@@ -106,8 +106,16 @@ func (f *FakeUserRepo) Create(_ context.Context, u user.User) error {
 	return nil
 }
 
-func (f *FakeUserRepo) GetByID(_ context.Context, _ uuid.UUID) (*user.User, error) {
-	return nil, f.Err
+func (f *FakeUserRepo) GetByID(_ context.Context, id uuid.UUID) (*user.User, error) {
+	if f.Err != nil {
+		return nil, f.Err
+	}
+	for i, u := range f.Created {
+		if u.ID == id {
+			return &f.Created[i], nil
+		}
+	}
+	return nil, domain.ErrNotFound
 }
 
 // ── Tenant ────────────────────────────────────────────────────────────────────
