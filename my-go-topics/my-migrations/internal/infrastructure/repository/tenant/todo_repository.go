@@ -66,16 +66,12 @@ func (r *TodoRepository) GetByID(
 	}, nil
 }
 
-func (r *TodoRepository) Complete(
+func (r *TodoRepository) Update(
 	ctx context.Context,
-	id uuid.UUID,
+	t todo.Todo,
 ) error {
-
-	err := r.commandQ.CompleteTodo(ctx, id)
-	if errors.Is(err, pgx.ErrNoRows){
-		return domain.ErrNotFound
-	}
-	return err
+	// Currently only Completed can change, so we reuse the CompleteTodo query.
+	return r.commandQ.CompleteTodo(ctx, t.ID)
 }
 
 func (r *TodoRepository) Delete(

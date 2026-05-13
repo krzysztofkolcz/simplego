@@ -66,7 +66,14 @@ func TestTodoRepository_Complete(t *testing.T) {
 		queryQ := querydb.New(commandQ.DB())
 		repo := tenantrepo.NewTodoRepository(commandQ, queryQ)
 
-		return repo.Complete(ctx, id)
+		t, err := repo.GetByID(ctx, id)
+		if err != nil {
+			return err
+		}
+		if err := t.Complete(); err != nil {
+			return err
+		}
+		return repo.Update(ctx, *t)
 	})
 	require.NoError(t, err)
 

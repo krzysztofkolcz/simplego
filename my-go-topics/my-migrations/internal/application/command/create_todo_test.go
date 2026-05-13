@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/krzysztofkolcz/mymigrations/internal/domain"
 	testhelpers "github.com/krzysztofkolcz/mymigrations/internal/testhelpers"
 )
 
@@ -47,4 +48,22 @@ func TestCreateTodoHandler_Handle_UoWError(t *testing.T) {
 	_, err := handler.Handle(context.Background(), CreateTodoCommand{Title: "buy milk"})
 
 	require.EqualError(t, err, "tx failed")
+}
+
+func TestCreateTodoHandler_Handle_EmptyTitle(t *testing.T) {
+	repo := &testhelpers.FakeTodoRepo{}
+	handler := NewCreateTodoHandler(&testhelpers.FakeTodoUoW{Repo: repo})
+
+	_, err := handler.Handle(context.Background(), CreateTodoCommand{Title: ""})
+
+	require.ErrorIs(t, err, domain.ErrInvalidTitle)
+}
+
+func TestCreateTodoHandler_Handle_WhitespaceTitle(t *testing.T) {
+	repo := &testhelpers.FakeTodoRepo{}
+	handler := NewCreateTodoHandler(&testhelpers.FakeTodoUoW{Repo: repo})
+
+	_, err := handler.Handle(context.Background(), CreateTodoCommand{Title: "   "})
+
+	require.ErrorIs(t, err, domain.ErrInvalidTitle)
 }

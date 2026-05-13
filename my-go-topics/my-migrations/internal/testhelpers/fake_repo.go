@@ -26,10 +26,9 @@ func (f *FakeTodoUoW) Execute(_ context.Context, fn func(todo.Repository) error)
 }
 
 type FakeTodoRepo struct {
-	Created   []todo.Todo
-	Completed []uuid.UUID
-	Deleted   []uuid.UUID
-	Err       error // returned by every method
+	Created []todo.Todo
+	Deleted []uuid.UUID
+	Err     error // returned by every method
 }
 
 func (f *FakeTodoRepo) Create(_ context.Context, t todo.Todo) error {
@@ -44,20 +43,25 @@ func (f *FakeTodoRepo) GetByID(_ context.Context, id uuid.UUID) (*todo.Todo, err
 	if f.Err != nil {
 		return nil, f.Err
 	}
-	for _, t := range f.Created {
+	for i, t := range f.Created {
 		if t.ID == id {
-			return &t, nil
+			return &f.Created[i], nil
 		}
 	}
 	return nil, domain.ErrNotFound
 }
 
-func (f *FakeTodoRepo) Complete(_ context.Context, id uuid.UUID) error {
+func (f *FakeTodoRepo) Update(_ context.Context, t todo.Todo) error {
 	if f.Err != nil {
 		return f.Err
 	}
-	f.Completed = append(f.Completed, id)
-	return nil
+	for i, existing := range f.Created {
+		if existing.ID == t.ID {
+			f.Created[i] = t
+			return nil
+		}
+	}
+	return domain.ErrNotFound
 }
 
 func (f *FakeTodoRepo) Delete(_ context.Context, id uuid.UUID) error {
@@ -68,7 +72,7 @@ func (f *FakeTodoRepo) Delete(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (f *FakeTodoRepo) List(_ context.Context) ([]todo.Todo, error){
+func (f *FakeTodoRepo) List(_ context.Context) ([]todo.Todo, error) {
 	if f.Err != nil {
 		return nil, f.Err
 	}

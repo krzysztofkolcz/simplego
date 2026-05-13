@@ -26,6 +26,13 @@ func (h *CompleteTodoHandler) Handle(
 ) error {
 
 	return h.uow.Execute(ctx, func(repo todo.Repository) error {
-		return repo.Complete(ctx, cmd.ID)
+		t, err := repo.GetByID(ctx, cmd.ID)
+		if err != nil {
+			return err
+		}
+		if err := t.Complete(); err != nil {
+			return err
+		}
+		return repo.Update(ctx, *t)
 	})
 }

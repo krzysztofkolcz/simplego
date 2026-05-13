@@ -21,6 +21,9 @@ func (s *Server) CreateTodo(
 		Title: req.Body.Title,
 	})
 	if err != nil {
+		if errors.Is(err, domain.ErrInvalidTitle) {
+			return httpapi.CreateTodo400JSONResponse{N400JSONResponse: badRequestError(err.Error())}, nil
+		}
 		return httpapi.CreateTodo500JSONResponse{N500JSONResponse: internalError(err)}, nil
 	}
 

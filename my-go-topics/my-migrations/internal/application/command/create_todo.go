@@ -25,13 +25,13 @@ func (h *CreateTodoHandler) Handle(
 	cmd CreateTodoCommand,
 ) (uuid.UUID, error) {
 
-	t := todo.Todo{
-		ID:    uuid.New(),
-		Title: cmd.Title,
+	t, err := todo.NewTodo(uuid.New(), cmd.Title)
+	if err != nil {
+		return uuid.Nil, err
 	}
 
-	err := h.uow.Execute(ctx, func(repo todo.Repository) error {
-		return repo.Create(ctx, t)
+	err = h.uow.Execute(ctx, func(repo todo.Repository) error {
+		return repo.Create(ctx, *t)
 	})
 	if err != nil {
 		return uuid.Nil, err

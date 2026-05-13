@@ -31,6 +31,16 @@ func notFoundError() httpapi.N404JSONResponse {
 	}
 }
 
+func badRequestError(msg string) httpapi.N400JSONResponse {
+	return httpapi.N400JSONResponse{
+		Error: httpapi.DetailedError{
+			Status:  400,
+			Code:    "BAD_REQUEST",
+			Message: msg,
+		},
+	}
+}
+
 func conflictError() httpapi.N409JSONResponse {
 	return httpapi.N409JSONResponse{
 		Error: httpapi.DetailedError{
