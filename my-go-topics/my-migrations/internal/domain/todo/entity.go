@@ -14,16 +14,20 @@ type Todo struct {
 	Title     string
 	Completed bool
 	CreatedAt time.Time
+
+	events []domain.DomainEvent
 }
 
 func NewTodo(id uuid.UUID, title string) (*Todo, error) {
 	if strings.TrimSpace(title) == "" {
 		return nil, domain.ErrInvalidTitle
 	}
-	return &Todo{
+	t := &Todo{
 		ID:    id,
 		Title: strings.TrimSpace(title),
-	}, nil
+	}
+	t.record(TodoCreated{TodoID: id, Title: t.Title, OccurredAt: time.Now()})
+	return t, nil
 }
 
 func (t *Todo) Complete() error {
@@ -32,4 +36,16 @@ func (t *Todo) Complete() error {
 	}
 	t.Completed = true
 	return nil
+}
+
+// PullEvents returns recorded events and clears the internal list.
+// Call after a successful transaction to publish events downstream.
+func (t *Todo) PullEvents() []domain.DomainEvent {
+	events := t.events
+	t.events = nil
+	return events
+}
+
+func (t *Todo) record(e domain.DomainEvent) {
+	t.events = append(t.events, e)
 }

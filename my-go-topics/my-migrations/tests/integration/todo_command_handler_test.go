@@ -10,13 +10,14 @@ import (
 	"github.com/krzysztofkolcz/mymigrations/internal/application/command"
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
 	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query"
+	infraevent "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/event"
 	tenantrepo "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/repository/tenant"
 )
 
 func TestCreateTodoHandler_Handle(t *testing.T) {
 	ctx := context.Background()
 	uow := tenantrepo.NewTodoUnitOfWork(db.NewTxManager(ConnectionPool), TenantSchema)
-	handler := command.NewCreateTodoHandler(uow)
+	handler := command.NewCreateTodoHandler(uow, infraevent.NewLogPublisher())
 
 	createdID, err := handler.Handle(ctx, command.CreateTodoCommand{Title: "buy milk"})
 	require.NoError(t, err)
@@ -41,7 +42,7 @@ func TestCompleteTodoHandler_Handle(t *testing.T) {
 	txManager := db.NewTxManager(ConnectionPool)
 	uow := tenantrepo.NewTodoUnitOfWork(txManager, TenantSchema)
 
-	id, err := command.NewCreateTodoHandler(uow).Handle(ctx, command.CreateTodoCommand{Title: "read a book"})
+	id, err := command.NewCreateTodoHandler(uow, infraevent.NewLogPublisher()).Handle(ctx, command.CreateTodoCommand{Title: "read a book"})
 	require.NoError(t, err)
 
 	err = command.NewCompleteTodoHandler(uow).Handle(ctx, command.CompleteTodoCommand{ID: id})
@@ -64,7 +65,7 @@ func TestDeleteTodoHandler_Handle(t *testing.T) {
 	txManager := db.NewTxManager(ConnectionPool)
 	uow := tenantrepo.NewTodoUnitOfWork(txManager, TenantSchema)
 
-	id, err := command.NewCreateTodoHandler(uow).Handle(ctx, command.CreateTodoCommand{Title: "write tests"})
+	id, err := command.NewCreateTodoHandler(uow, infraevent.NewLogPublisher()).Handle(ctx, command.CreateTodoCommand{Title: "write tests"})
 	require.NoError(t, err)
 
 	err = command.NewDeleteTodoHandler(uow).Handle(ctx, command.DeleteTodoCommand{ID: id})

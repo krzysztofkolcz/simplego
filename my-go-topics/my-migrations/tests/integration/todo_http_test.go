@@ -12,13 +12,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
+	infraevent "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/event"
 	"github.com/krzysztofkolcz/mymigrations/internal/http/handler"
 	"github.com/krzysztofkolcz/mymigrations/internal/http/router"
 )
 
 func newTestServer() *httptest.Server {
 	txManager := db.NewTxManager(ConnectionPool)
-	srv := handler.NewServer(txManager, ConnectionPool)
+	srv := handler.NewServer(txManager, ConnectionPool, infraevent.NewLogPublisher())
 	return httptest.NewServer(router.New(srv))
 }
 

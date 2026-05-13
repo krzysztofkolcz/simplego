@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
+	infraevent "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/event"
 	"github.com/krzysztofkolcz/mymigrations/internal/http/handler"
 	"github.com/krzysztofkolcz/mymigrations/internal/http/router"
 	slogctx "github.com/veqryn/slog-context"
@@ -54,7 +55,7 @@ func main() {
 
 	// Wiring
 	txManager := db.NewTxManager(pool)
-	srv := handler.NewServer(txManager, pool)
+	srv := handler.NewServer(txManager, pool, infraevent.NewLogPublisher())
 	httpHandler := router.New(srv)
 
 	// HTTP server

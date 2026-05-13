@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/krzysztofkolcz/mymigrations/internal/domain"
 	"github.com/krzysztofkolcz/mymigrations/internal/domain/todo"
 )
 
@@ -13,11 +14,12 @@ type CreateTodoCommand struct {
 }
 
 type CreateTodoHandler struct {
-	uow todo.UnitOfWork
+	uow       todo.UnitOfWork
+	publisher domain.EventPublisher
 }
 
-func NewCreateTodoHandler(uow todo.UnitOfWork) *CreateTodoHandler {
-	return &CreateTodoHandler{uow: uow}
+func NewCreateTodoHandler(uow todo.UnitOfWork, publisher domain.EventPublisher) *CreateTodoHandler {
+	return &CreateTodoHandler{uow: uow, publisher: publisher}
 }
 
 func (h *CreateTodoHandler) Handle(
@@ -35,6 +37,13 @@ func (h *CreateTodoHandler) Handle(
 	})
 	if err != nil {
 		return uuid.Nil, err
+	}
+
+	// Publish after successful transaction.
+	// In production, replace with an OutboxPublisher that writes events
+	// to an outbox table in the same transaction for guaranteed delivery.
+	if err := h.publisher.Publish(ctx, t.PullEvents()); err != nil {
+		return t.ID, err
 	}
 
 	return t.ID, nil

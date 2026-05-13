@@ -11,6 +11,21 @@ import (
 	"github.com/krzysztofkolcz/mymigrations/internal/domain/user"
 )
 
+// ── EventPublisher ────────────────────────────────────────────────────────────
+
+type FakeEventPublisher struct {
+	Published []domain.DomainEvent
+	Err       error
+}
+
+func (p *FakeEventPublisher) Publish(_ context.Context, events []domain.DomainEvent) error {
+	if p.Err != nil {
+		return p.Err
+	}
+	p.Published = append(p.Published, events...)
+	return nil
+}
+
 // ── Todo ──────────────────────────────────────────────────────────────────────
 
 type FakeTodoUoW struct {

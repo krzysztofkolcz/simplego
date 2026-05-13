@@ -17,7 +17,7 @@ func (s *Server) CreateTodo(
 ) (httpapi.CreateTodoResponseObject, error) {
 
 	uow := tenantrepo.NewTodoUnitOfWork(s.txManager, tenantSchema(req.Params.XTenantID))
-	id, err := appcommand.NewCreateTodoHandler(uow).Handle(ctx, appcommand.CreateTodoCommand{
+	id, err := appcommand.NewCreateTodoHandler(uow, s.eventPublisher).Handle(ctx, appcommand.CreateTodoCommand{
 		Title: req.Body.Title,
 	})
 	if err != nil {
