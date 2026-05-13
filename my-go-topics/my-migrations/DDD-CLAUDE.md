@@ -20,7 +20,11 @@ Stack: Go, PostgreSQL, sqlc, golang-migrate, oapi-codegen, testcontainers.
 11. [OpenAPI i oapi-codegen](#11-openapi-i-oapi-codegen)
 12. [Wiring — cmd/api/main.go](#12-wiring)
 13. [Przepływ requestu — end to end](#13-przepływ-requestu)
-14. [Kolejne kroki](#14-kolejne-kroki)
+14. [Aggregate z inwariantami](#14-aggregate-z-inwariantami)
+15. [Value Objects](#15-value-objects)
+16. [Domain Events](#16-domain-events)
+17. [ReadRepository — odczyty bez UoW](#17-readrepository)
+18. [Kolejne kroki](#18-kolejne-kroki)
 
 ---
 
@@ -93,7 +97,7 @@ type Todo struct {
 // internal/domain/user/entity.go
 type User struct {
     ID    uuid.UUID
-    Email string
+    Email Email   // value object — patrz sekcja "Value Objects"
 }
 ```
 
@@ -114,14 +118,22 @@ type Tenant struct {
 Domena **definiuje** kontrakt dla dostępu do danych. Nie wie jak jest zaimplementowany.
 
 ```go
-// internal/domain/todo/repository.go
+// internal/domain/todo/repository.go — używany przez command handlery (w transakcji przez UoW)
 type Repository interface {
     Create(ctx context.Context, todo Todo) error
     GetByID(ctx context.Context, id uuid.UUID) (*Todo, error)
-    Complete(ctx context.Context, id uuid.UUID) error
+    Update(ctx context.Context, todo Todo) error
     Delete(ctx context.Context, id uuid.UUID) error
 }
+
+// internal/domain/todo/read_repository.go — używany przez query handlery (bez UoW)
+type ReadRepository interface {
+    GetByID(ctx context.Context, id uuid.UUID) (*Todo, error)
+    List(ctx context.Context) ([]Todo, error)
+}
 ```
+
+`Repository` i `ReadRepository` to dwa osobne interfejsy: `Repository` działa wewnątrz transakcji (UoW), `ReadRepository` otwiera własną read-only transakcję per-metoda. Patrz sekcja 17.
 
 ### Interfejsy Unit of Work
 
@@ -134,24 +146,23 @@ type UnitOfWork interface {
 }
 ```
 
-### Kiedy dodać logikę do encji?
+### Błędy domenowe
 
-Gdy pojawi się reguła biznesowa, przenieś ją do encji jako konstruktor lub metodę:
+Wszystkie błędy domenowe żyją w `internal/domain/errors.go`. Infrastruktura i HTTP mapują je na odpowiednie kody:
 
 ```go
-// Przykład: walidacja przy tworzeniu
-func NewTodo(title string) (Todo, error) {
-    if strings.TrimSpace(title) == "" {
-        return Todo{}, errors.New("title cannot be empty")
-    }
-    if len(title) > 255 {
-        return Todo{}, errors.New("title too long")
-    }
-    return Todo{ID: uuid.New(), Title: title}, nil
-}
+var ErrNotFound        = errors.New("not found")
+var ErrConflict        = errors.New("conflict")         // 409 — duplikat (naruszenie unique)
+var ErrAlreadyCompleted = errors.New("already completed") // inwariant agregatu
+var ErrInvalidTitle    = errors.New("title cannot be empty") // inwariant agregatu
+var ErrInvalidEmail    = errors.New("invalid email address") // value object
 ```
 
-Taka logika jest łatwa do przetestowania — żadnych zależności zewnętrznych.
+HTTP handler mapuje:
+- `domain.ErrNotFound` → 404
+- `domain.ErrConflict` → 409
+- `domain.ErrInvalidTitle`, `domain.ErrInvalidEmail` → 400
+- pozostałe → 500
 
 ---
 
@@ -315,10 +326,12 @@ application/query/      ← GetTodo, GetUser, GetTenant
 type Repository interface {
     Create(ctx context.Context, todo Todo) error
     GetByID(ctx context.Context, id uuid.UUID) (*Todo, error)
-    Complete(ctx context.Context, id uuid.UUID) error
+    Update(ctx context.Context, todo Todo) error   // używane przez CompleteTodo: load → Complete() → Update
     Delete(ctx context.Context, id uuid.UUID) error
 }
 ```
+
+`Complete(id)` zostało usunięte. Wzorzec to teraz: load → mutate → save. Handler ładuje agregat przez `GetByID`, woła `t.Complete()` (metoda na encji sprawdza inwariant), i zapisuje przez `Update`. Patrz sekcja 14.
 
 ### Implementacja w infrastrukturze
 
@@ -405,17 +418,23 @@ func (u *TodoUnitOfWork) Execute(ctx context.Context, fn func(todo.Repository) e
 
 ```go
 type CreateTodoHandler struct {
-    uow todo.UnitOfWork   // tylko interfejs domenowy
+    uow       todo.UnitOfWork
+    publisher domain.EventPublisher   // wstrzykiwany — handler publikuje eventy po transakcji
 }
 
 func (h *CreateTodoHandler) Handle(ctx context.Context, cmd CreateTodoCommand) (uuid.UUID, error) {
-    t := todo.Todo{ID: uuid.New(), Title: cmd.Title}
-    err := h.uow.Execute(ctx, func(repo todo.Repository) error {
-        return repo.Create(ctx, t)
+    t, err := todo.NewTodo(uuid.New(), cmd.Title)   // konstruktor waliduje tytuł
+    if err != nil {
+        return uuid.Nil, err   // domain.ErrInvalidTitle → handler zwraca, HTTP handler mapuje na 400
+    }
+    err = h.uow.Execute(ctx, func(repo todo.Repository) error {
+        return repo.Create(ctx, *t)
     })
     if err != nil {
         return uuid.Nil, err
     }
+    // Eventy publikowane po commicie. W produkcji: OutboxPublisher pisze do DB w tej samej tx.
+    _ = h.publisher.Publish(ctx, t.PullEvents())
     return t.ID, nil
 }
 ```
@@ -425,7 +444,7 @@ func (h *CreateTodoHandler) Handle(ctx context.Context, cmd CreateTodoCommand) (
 ```go
 // tenantSchema z nagłówka X-Tenant-ID
 uow := tenantrepo.NewTodoUnitOfWork(s.txManager, tenantSchema)
-handler := command.NewCreateTodoHandler(uow)
+handler := command.NewCreateTodoHandler(uow, s.eventPublisher)
 id, err := handler.Handle(ctx, command.CreateTodoCommand{Title: req.Body.Title})
 ```
 
@@ -463,33 +482,44 @@ Jeden plik = jeden command. Schemat zawsze taki sam:
 ```go
 // internal/application/command/create_todo.go
 
-type CreateTodoCommand struct {
-    Title string
-}
+type CreateTodoCommand struct { Title string }
 
 type CreateTodoHandler struct {
-    uow todo.UnitOfWork
+    uow       todo.UnitOfWork
+    publisher domain.EventPublisher
 }
 
-func NewCreateTodoHandler(uow todo.UnitOfWork) *CreateTodoHandler {
-    return &CreateTodoHandler{uow: uow}
+func NewCreateTodoHandler(uow todo.UnitOfWork, publisher domain.EventPublisher) *CreateTodoHandler {
+    return &CreateTodoHandler{uow: uow, publisher: publisher}
 }
 
 func (h *CreateTodoHandler) Handle(ctx context.Context, cmd CreateTodoCommand) (uuid.UUID, error) {
-    t := todo.Todo{ID: uuid.New(), Title: cmd.Title}
-    err := h.uow.Execute(ctx, func(repo todo.Repository) error {
-        return repo.Create(ctx, t)
-    })
-    if err != nil {
-        return uuid.Nil, err
-    }
+    t, err := todo.NewTodo(uuid.New(), cmd.Title)
+    if err != nil { return uuid.Nil, err }
+    err = h.uow.Execute(ctx, func(repo todo.Repository) error { return repo.Create(ctx, *t) })
+    if err != nil { return uuid.Nil, err }
+    _ = h.publisher.Publish(ctx, t.PullEvents())
     return t.ID, nil
 }
 ```
 
-Handlery dla `CompleteTodo` i `DeleteTodo` są analogiczne ale zwracają tylko `error`.
+`CompleteTodo` stosuje wzorzec load → mutate → save:
+
+```go
+// internal/application/command/complete_todo.go
+func (h *CompleteTodoHandler) Handle(ctx context.Context, cmd CompleteTodoCommand) error {
+    return h.uow.Execute(ctx, func(repo todo.Repository) error {
+        t, err := repo.GetByID(ctx, cmd.ID)
+        if err != nil { return err }
+        if err := t.Complete(); err != nil { return err }   // sprawdza inwariant
+        return repo.Update(ctx, *t)
+    })
+}
+```
 
 ### Query handlery
+
+Query handler przyjmuje `ReadRepository` (nie `Repository`), bo nie potrzebuje transakcji z UoW — otwiera własną read-only transakcję:
 
 ```go
 // internal/application/query/get_todo.go
@@ -500,22 +530,19 @@ type GetTodoResult struct {
     ID        uuid.UUID
     Title     string
     Completed bool
+    CreatedAt time.Time   // zawsze wypełnione — brak null w JSON
 }
 
 type GetTodoHandler struct {
-    repo todo.Repository
+    repo todo.ReadRepository   // ReadRepository, nie Repository
 }
 
 func (h *GetTodoHandler) Handle(ctx context.Context, q GetTodoQuery) (*GetTodoResult, error) {
     t, err := h.repo.GetByID(ctx, q.ID)
-    if err != nil {
-        return nil, err
-    }
-    return &GetTodoResult{ID: t.ID, Title: t.Title, Completed: t.Completed}, nil
+    if err != nil { return nil, err }
+    return &GetTodoResult{ID: t.ID, Title: t.Title, Completed: t.Completed, CreatedAt: t.CreatedAt}, nil
 }
 ```
-
-`GetTodoResult` celowo nie zawiera wszystkich pól encji — zwraca tylko to, czego potrzebuje wywołujący.
 
 ---
 
@@ -534,47 +561,68 @@ func (h *GetTodoHandler) Handle(ctx context.Context, q GetTodoQuery) (*GetTodoRe
 
 ### Unit testy z fake'ami (application layer)
 
-Fake UoW i fake Repository implementują interfejsy domenowe w pamięci:
+Fake'i żyją w `internal/testhelpers/fake_repo.go` — współdzielone między testami unit i integracyjnymi:
 
 ```go
-// internal/application/command/fakes_test.go
+// internal/testhelpers/fake_repo.go
 
-type fakeTodoUoW struct {
-    repo todo.Repository
-    err  error
+type FakeTodoUoW struct {
+    Repo todo.Repository
+    Err  error
+}
+func (f *FakeTodoUoW) Execute(_ context.Context, fn func(todo.Repository) error) error {
+    if f.Err != nil { return f.Err }
+    return fn(f.Repo)
 }
 
-func (f *fakeTodoUoW) Execute(_ context.Context, fn func(todo.Repository) error) error {
-    if f.err != nil { return f.err }
-    return fn(f.repo)
+type FakeTodoRepo struct {
+    Created []todo.Todo
+    Err     error
 }
-
-type fakeTodoRepo struct {
-    created   []todo.Todo
-    completed []uuid.UUID
-    err       error
-}
-
-func (f *fakeTodoRepo) Create(_ context.Context, t todo.Todo) error {
-    if f.err != nil { return f.err }
-    f.created = append(f.created, t)
+func (f *FakeTodoRepo) Create(_ context.Context, t todo.Todo) error {
+    if f.Err != nil { return f.Err }
+    f.Created = append(f.Created, t)
     return nil
 }
-// ... pozostałe metody
+func (f *FakeTodoRepo) GetByID(_ context.Context, id uuid.UUID) (*todo.Todo, error) {
+    for i := range f.Created {
+        if f.Created[i].ID == id { return &f.Created[i], nil }
+    }
+    return nil, domain.ErrNotFound
+}
+func (f *FakeTodoRepo) Update(_ context.Context, t todo.Todo) error {
+    for i := range f.Created {
+        if f.Created[i].ID == t.ID { f.Created[i] = t; return nil }
+    }
+    return domain.ErrNotFound
+}
+// ... Delete, Create
+
+// FakeEventPublisher zbiera eventy do asercji
+type FakeEventPublisher struct {
+    Published []domain.DomainEvent
+    Err       error
+}
+func (f *FakeEventPublisher) Publish(_ context.Context, events []domain.DomainEvent) error {
+    f.Published = append(f.Published, events...)
+    return f.Err
+}
 ```
 
 Testy są szybkie (4ms dla 14 testów) i nie wymagają bazy:
 
 ```go
 func TestCreateTodoHandler_Handle_StoresTodo(t *testing.T) {
-    repo := &fakeTodoRepo{}
-    handler := NewCreateTodoHandler(&fakeTodoUoW{repo: repo})
+    repo := &testhelpers.FakeTodoRepo{}
+    pub  := &testhelpers.FakeEventPublisher{}
+    handler := NewCreateTodoHandler(&testhelpers.FakeTodoUoW{Repo: repo}, pub)
 
     id, err := handler.Handle(context.Background(), CreateTodoCommand{Title: "buy milk"})
 
     require.NoError(t, err)
     require.NotEqual(t, uuid.Nil, id)
-    require.Equal(t, "buy milk", repo.created[0].Title)
+    require.Equal(t, "buy milk", repo.Created[0].Title)
+    require.Len(t, pub.Published, 1)   // TodoCreated event został opublikowany
 }
 ```
 
@@ -677,16 +725,18 @@ internal/http/
 ```go
 // internal/http/handler/server.go
 type Server struct {
-    txManager *db.TxManager
-    queryQ    *querydb.Queries    // pool-backed, dla public schema reads
-    commandQ  *commanddb.Queries  // pool-backed, dla public schema reads
+    txManager      *db.TxManager
+    queryQ         *querydb.Queries    // pool-backed, dla public schema reads
+    commandQ       *commanddb.Queries  // pool-backed, dla public schema reads
+    eventPublisher domain.EventPublisher
 }
 
-func NewServer(txManager *db.TxManager, pool *pgxpool.Pool) *Server {
+func NewServer(txManager *db.TxManager, pool *pgxpool.Pool, eventPublisher domain.EventPublisher) *Server {
     return &Server{
-        txManager: txManager,
-        queryQ:    querydb.New(pool),
-        commandQ:  commanddb.New(pool),
+        txManager:      txManager,
+        queryQ:         querydb.New(pool),
+        commandQ:       commanddb.New(pool),
+        eventPublisher: eventPublisher,
     }
 }
 ```
@@ -701,13 +751,30 @@ Go pozwala metodom jednego typu żyć w różnych plikach tego samego pakietu. `
 // internal/http/handler/todo_handler.go
 func (s *Server) CreateTodo(ctx context.Context, req httpapi.CreateTodoRequestObject) (httpapi.CreateTodoResponseObject, error) {
     uow := tenantrepo.NewTodoUnitOfWork(s.txManager, tenantSchema(req.Params.XTenantID))
-    id, err := appcommand.NewCreateTodoHandler(uow).Handle(ctx, appcommand.CreateTodoCommand{
+    id, err := appcommand.NewCreateTodoHandler(uow, s.eventPublisher).Handle(ctx, appcommand.CreateTodoCommand{
         Title: req.Body.Title,
     })
     if err != nil {
+        if errors.Is(err, domain.ErrInvalidTitle) {
+            return httpapi.CreateTodo400JSONResponse{N400JSONResponse: badRequestError(err.Error())}, nil
+        }
         return httpapi.CreateTodo500JSONResponse{N500JSONResponse: internalError(err)}, nil
     }
     return httpapi.CreateTodo201JSONResponse{Id: id}, nil
+}
+```
+
+Query handlery używają `ReadRepository` (per-metoda transakcja read-only) zamiast `UoW`:
+
+```go
+func (s *Server) GetTodo(ctx context.Context, req httpapi.GetTodoRequestObject) (httpapi.GetTodoResponseObject, error) {
+    repo := tenantrepo.NewTodoReadRepository(s.txManager, tenantSchema(req.Params.XTenantID))
+    result, err := appquery.NewGetTodoHandler(repo).Handle(ctx, appquery.GetTodoQuery{ID: req.Id})
+    if err != nil {
+        if errors.Is(err, domain.ErrNotFound) { return httpapi.GetTodo404JSONResponse{...}, nil }
+        return httpapi.GetTodo500JSONResponse{...}, nil
+    }
+    return httpapi.GetTodo200JSONResponse{Id: result.ID, Title: result.Title, ...}, nil
 }
 ```
 
@@ -829,8 +896,9 @@ func main() {
 
     // 4. Wiring warstw
     txManager := db.NewTxManager(pool)
-    srv := handler.NewServer(txManager, pool)      // warstwa HTTP
-    httpHandler := router.New(srv)                  // middleware + routing
+    publisher := infraevent.NewLogPublisher()
+    srv := handler.NewServer(txManager, pool, publisher)   // warstwa HTTP
+    httpHandler := router.New(srv)                          // middleware + routing
 
     // 5. HTTP server
     httpServer := &http.Server{Addr: ":8080", Handler: httpHandler, ...}
@@ -872,53 +940,282 @@ Przykład: `POST /v1/todos` z nagłówkiem `X-Tenant-ID: abc-123`
                            — tworzy CreateTodoHandler(uow)
                            — wywołuje handler.Handle(ctx, CreateTodoCommand{Title: "buy milk"})
        ↓
-7. create_todo.go          — t := Todo{ID: uuid.New(), Title: "buy milk"}
-                           — uow.Execute(ctx, fn)
+7. create_todo.go          — t, err := todo.NewTodo(uuid.New(), "buy milk")
+                             (NewTodo waliduje tytuł, nagrywa TodoCreated event)
        ↓
-8. unit_of_work.go         — txManager.WithinTransaction(ctx, "tenant_abc_123", fn)
+8. create_todo.go          — uow.Execute(ctx, fn)
        ↓
-9. tx.go                   — BEGIN
+9. unit_of_work.go         — txManager.WithinTransaction(ctx, "tenant_abc_123", fn)
+       ↓
+10. tx.go                  — BEGIN
                            — SET LOCAL search_path = "tenant_abc_123"
                            — commandQ := commanddb.New(tx)
                            — fn(commandQ)
        ↓
-10. todo_repository.go     — commandQ.CreateTodo(ctx, CreateTodoParams{ID: uuid, Title: "buy milk"})
+11. todo_repository.go     — commandQ.CreateTodo(ctx, CreateTodoParams{ID: uuid, Title: "buy milk"})
        ↓
-11. PostgreSQL             — INSERT INTO todos (id, title) VALUES (...)
+12. PostgreSQL             — INSERT INTO todos (id, title) VALUES (...)
                              (w schemacie tenant_abc_123)
        ↓
-12. tx.go                  — COMMIT
+13. tx.go                  — COMMIT
        ↓
-13. create_todo.go         — zwraca (id, nil)
+14. create_todo.go         — publisher.Publish(ctx, t.PullEvents())
+                             (TodoCreated event — po commicie, poza transakcją)
        ↓
-14. todo_handler.go        — zwraca CreateTodo201JSONResponse{Id: id}
+15. create_todo.go         — zwraca (id, nil)
        ↓
-15. oapi-codegen           — serializuje do JSON, ustawia status 201
+16. todo_handler.go        — zwraca CreateTodo201JSONResponse{Id: id}
        ↓
-16. Logging middleware     — loguje "request completed" {status: 201, duration: 3ms}
+17. oapi-codegen           — serializuje do JSON, ustawia status 201
        ↓
-17. HTTP response 201 {"id": "..."}
+18. Logging middleware     — loguje "request completed" {status: 201, duration: 3ms}
+       ↓
+19. HTTP response 201 {"id": "..."}
 ```
 
 ---
 
-## 14. Kolejne kroki
+## 14. Aggregate z inwariantami
 
-### Krótkoterminowe
+Agregat to encja z logiką biznesową. Zamiast anemic domain model (settery wszędzie), agregat chroni swoje niezmienniki.
+
+### Konstruktor zamiast pola ID na zewnątrz
+
+```go
+// internal/domain/todo/entity.go
+type Todo struct {
+    ID        uuid.UUID
+    Title     string
+    Completed bool
+    CreatedAt time.Time
+    events    []domain.DomainEvent   // prywatne — aggregate records events
+}
+
+func NewTodo(id uuid.UUID, title string) (*Todo, error) {
+    if strings.TrimSpace(title) == "" {
+        return nil, domain.ErrInvalidTitle
+    }
+    t := &Todo{ID: id, Title: strings.TrimSpace(title)}
+    t.record(TodoCreated{TodoID: id, Title: t.Title, OccurredAt: time.Now()})
+    return t, nil
+}
+```
+
+### Metody chronią inwarianty
+
+```go
+func (t *Todo) Complete() error {
+    if t.Completed {
+        return domain.ErrAlreadyCompleted   // nie możesz ukończyć już ukończonego
+    }
+    t.Completed = true
+    return nil
+}
+```
+
+### Wzorzec load → mutate → save
+
+Zamiast `repo.Complete(id)` (baza wie o logice), teraz:
+
+```go
+// CompleteTodoHandler
+t, err := repo.GetByID(ctx, cmd.ID)   // 1. załaduj agregat
+if err != nil { return err }
+if err := t.Complete(); err != nil { return err }   // 2. zmutuj (sprawdza inwariant)
+return repo.Update(ctx, *t)           // 3. zapisz
+```
+
+**Korzyść:** logika jest w kodzie Go (testowalnym), nie rozrzucona po SQL i handlerach.
+
+---
+
+## 15. Value Objects
+
+Value object to typ bez tożsamości — dwa value objects z tymi samymi danymi są równe. Hermetyzuje walidację i normalizację.
+
+### Email
+
+```go
+// internal/domain/user/email.go
+type Email struct {
+    value string   // prywatne — jedyny dostęp przez String()
+}
+
+func NewEmail(s string) (Email, error) {
+    normalized := strings.ToLower(strings.TrimSpace(s))
+    parts := strings.SplitN(normalized, "@", 3)
+    if len(parts) != 2 || parts[0] == "" || !strings.Contains(parts[1], ".") {
+        return Email{}, domain.ErrInvalidEmail
+    }
+    return Email{value: normalized}, nil
+}
+
+func (e Email) String() string { return e.value }
+```
+
+### Użycie w encji
+
+```go
+type User struct {
+    ID    uuid.UUID
+    Email Email   // nie string — kompilator wymusza użycie NewEmail()
+}
+```
+
+### Propagacja przez warstwy
+
+- **Application**: `email, err := user.NewEmail(cmd.Email)` — walidacja na wejściu command handlera
+- **Infrastructure write**: `u.Email.String()` → SQL
+- **Infrastructure read**: `email, err := user.NewEmail(row.Email)` → jeśli baza ma zły email, to błąd odczytu (data corruption)
+- **HTTP**: `domain.ErrInvalidEmail` → 400
+
+---
+
+## 16. Domain Events
+
+Agregat nagrywa co się stało. Handler publikuje po commicie.
+
+### Interfejsy w domenie
+
+```go
+// internal/domain/event.go
+type DomainEvent interface {
+    EventName() string
+}
+
+type EventPublisher interface {
+    Publish(ctx context.Context, events []DomainEvent) error
+}
+```
+
+### Event w agregacie
+
+```go
+// internal/domain/todo/events.go
+type TodoCreated struct {
+    TodoID     uuid.UUID
+    Title      string
+    OccurredAt time.Time
+}
+func (e TodoCreated) EventName() string { return "todo.created" }
+```
+
+Agregat nagrywa event w konstruktorze:
+
+```go
+func NewTodo(...) (*Todo, error) {
+    ...
+    t.record(TodoCreated{TodoID: id, Title: t.Title, OccurredAt: time.Now()})
+    return t, nil
+}
+
+func (t *Todo) PullEvents() []domain.DomainEvent {
+    events := t.events
+    t.events = nil
+    return events
+}
+```
+
+### Publikacja po commicie
+
+```go
+// create_todo.go
+err = h.uow.Execute(ctx, func(repo todo.Repository) error { return repo.Create(ctx, *t) })
+if err != nil { return uuid.Nil, err }
+// COMMIT już nastąpił — teraz publikujemy
+_ = h.publisher.Publish(ctx, t.PullEvents())
+```
+
+**Ważne:** w produkcji `OutboxPublisher` powinien zapisać eventy do tabeli `outbox` **w tej samej transakcji** co agregat (gwarantowana dostawa). `LogPublisher` (aktualna implementacja) tylko loguje — bez gwarancji.
+
+### Implementacje
+
+```go
+// internal/infrastructure/event/log_publisher.go — na produkcję (tymczasowo)
+type LogPublisher struct{}
+func (p *LogPublisher) Publish(ctx context.Context, events []domain.DomainEvent) error {
+    for _, e := range events { slog.InfoContext(ctx, "domain event", "event", e.EventName()) }
+    return nil
+}
+
+// internal/testhelpers/fake_repo.go — do testów
+type FakeEventPublisher struct { Published []domain.DomainEvent; Err error }
+func (f *FakeEventPublisher) Publish(_ context.Context, events []domain.DomainEvent) error {
+    f.Published = append(f.Published, events...)
+    return f.Err
+}
+```
+
+---
+
+## 17. ReadRepository
+
+Dwa osobne interfejsy dla odczytów i zapisów, bo mają inne wymagania transakcyjne.
+
+### Dlaczego nie używać UoW do odczytów?
+
+`UoW.Execute(fn)` otwiera transakcję zapisu — po co blokować zasoby dla SELECT? Query handler potrzebuje tylko jednej operacji per wywołanie.
+
+### ReadRepository: per-metoda transakcja
+
+```go
+// internal/domain/todo/read_repository.go
+type ReadRepository interface {
+    GetByID(ctx context.Context, id uuid.UUID) (*Todo, error)
+    List(ctx context.Context) ([]Todo, error)
+}
+```
+
+```go
+// internal/infrastructure/repository/tenant/todo_read_repository.go
+type TodoReadRepository struct {
+    txManager *db.TxManager
+    schema    string
+}
+
+func (r *TodoReadRepository) GetByID(ctx context.Context, id uuid.UUID) (*todo.Todo, error) {
+    var result *todo.Todo
+    err := r.txManager.WithinTransactionReadonly(ctx, r.schema, func(q *querydb.Queries) error {
+        repo := NewTodoRepository(nil, q)
+        var err error
+        result, err = repo.GetByID(ctx, id)
+        return err
+    })
+    return result, err
+}
+```
+
+Każda metoda chowa `WithinTransactionReadonly` wewnętrznie — wywołujący nie wie nic o transakcjach.
+
+### Porównanie z UoW
+
+| | `Repository` (przez UoW) | `ReadRepository` |
+|---|---|---|
+| Używane przez | command handlery | query handlery |
+| Transakcja | zarządzana przez UoW (może obejmować kilka operacji) | per-metoda, read-only |
+| Blokowanie | zapis (może blokować inne tx) | read-only (minimalne blokowanie) |
+| Wzorzec | `fn func(repo Repository)` callback | bezpośrednie wywołanie metody |
+
+---
+
+## 18. Kolejne kroki
+
+### Zrobione (sesje 2026-05-12 i 2026-05-13)
+- [x] `ListTodos` query handler + ReadRepository
+- [x] `ErrConflict` (409) dla CreateTenant i CreateUser
+- [x] `CreatedAt` w GetTodoResult i ListTodosResult
+- [x] Testy integracyjne HTTP (httptest.NewServer + router.New)
+- [x] Unit testy query handlerów
+- [x] Aggregate z inwariantami (`NewTodo`, `Complete()`)
+- [x] Value Object `Email`
+- [x] Domain Events (`TodoCreated`, `LogPublisher`, `FakeEventPublisher`)
+
+### Do zrobienia
+- [ ] `CompleteTodo` brak 409 w OpenAPI spec — `ErrAlreadyCompleted` wraca jako 500
+- [ ] `OutboxPublisher` — zapis eventów do tabeli DB w tej samej transakcji
+- [ ] Domain events dla innych agregatów: `TodoCompleted`, `TodoDeleted`
+- [ ] Input ports (interfejsy warstwy aplikacyjnej) — dla pełnej hexagonal architecture
 - [ ] Middleware autoryzacji — JWT, wyciąganie tenant ID z tokena zamiast z nagłówka
-- [ ] `ListTodos` query handler — sqlc ma już `ListTodos` i `ListIncompleteTodos`
-- [ ] Walidacja danych domenowych — konstruktory z logiką w encjach
-
-### Średnioterminowe
-- [ ] Testy unit dla HTTP handlerów — mapowanie błędów na kody HTTP z `httptest`
-- [ ] Testy e2e — start serwera + prawdziwe HTTP requesty z testcontainers
-- [ ] Obsługa błędów domenowych — własne typy błędów (np. `ErrNotFound`) zamiast `pgx.ErrNoRows` w handlerach
-
-### Długoterminowe — CQRS i Event Sourcing
-- [ ] Osobna baza dla read modeli — queries czytają z zoptymalizowanych projekcji
-- [ ] Domain Events — command handler emituje zdarzenia (`TodoCreated`, `TodoCompleted`)
-- [ ] Event Store — zdarzenia są źródłem prawdy, stan odtwarzany z eventów
-- [ ] Outbox pattern — zdarzenia w tej samej transakcji co mutacja, potem asynchronicznie publikowane
 
 ### Diagram docelowej architektury z Event Sourcing
 
