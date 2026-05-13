@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/krzysztofkolcz/mymigrations/internal/domain"
 	"github.com/krzysztofkolcz/mymigrations/internal/domain/tenant"
 	"github.com/krzysztofkolcz/mymigrations/internal/domain/todo"
 	"github.com/krzysztofkolcz/mymigrations/internal/domain/user"
@@ -39,8 +40,16 @@ func (f *FakeTodoRepo) Create(_ context.Context, t todo.Todo) error {
 	return nil
 }
 
-func (f *FakeTodoRepo) GetByID(_ context.Context, _ uuid.UUID) (*todo.Todo, error) {
-	return nil, f.Err
+func (f *FakeTodoRepo) GetByID(_ context.Context, id uuid.UUID) (*todo.Todo, error) {
+	if f.Err != nil {
+		return nil, f.Err
+	}
+	for _, t := range f.Created {
+		if t.ID == id {
+			return &t, nil
+		}
+	}
+	return nil, domain.ErrNotFound
 }
 
 func (f *FakeTodoRepo) Complete(_ context.Context, id uuid.UUID) error {
