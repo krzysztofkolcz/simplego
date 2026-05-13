@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/krzysztofkolcz/mymigrations/internal/domain"
 	"github.com/krzysztofkolcz/mymigrations/internal/domain/tenant"
@@ -41,8 +42,15 @@ func (r *TenantRepository) Create(
 			SchemaName: t.SchemaName,
 		},
 	)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return domain.ErrConflict
+		}
+		return err
+	}
 
-	return err
+	return nil
 }
 
 func (r *TenantRepository) GetByID(

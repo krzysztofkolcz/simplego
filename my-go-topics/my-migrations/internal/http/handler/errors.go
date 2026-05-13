@@ -30,3 +30,13 @@ func notFoundError() httpapi.N404JSONResponse {
 		},
 	}
 }
+
+func conflictError() httpapi.N409JSONResponse {
+	return httpapi.N409JSONResponse{
+		Error: httpapi.DetailedError{
+			Status:  409,
+			Code:    "CONFLICT",
+			Message: "Resource already exists",
+		},
+	}
+}

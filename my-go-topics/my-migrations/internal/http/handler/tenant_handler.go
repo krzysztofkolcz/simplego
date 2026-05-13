@@ -21,6 +21,9 @@ func (s *Server) CreateTenant(
 		SchemaName: req.Body.SchemaName,
 	})
 	if err != nil {
+		if errors.Is(err, domain.ErrConflict) {
+			return httpapi.CreateTenant409JSONResponse{N409JSONResponse: conflictError()}, nil
+		}
 		return httpapi.CreateTenant500JSONResponse{N500JSONResponse: internalError(err)}, nil
 	}
 
