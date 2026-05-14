@@ -66,6 +66,11 @@ func (s *Server) CompleteTodo(
 		if errors.Is(err, domain.ErrNotFound) {
 			return httpapi.CompleteTodo404JSONResponse{N404JSONResponse: notFoundError()}, nil
 		}
+		if errors.Is(err, domain.ErrAlreadyCompleted) {
+			return httpapi.CompleteTodo409JSONResponse{N409JSONResponse: httpapi.N409JSONResponse{
+				Error: httpapi.DetailedError{Status: 409, Code: "CONFLICT", Message: err.Error()},
+			}}, nil
+		}
 		return httpapi.CompleteTodo500JSONResponse{N500JSONResponse: internalError(err)}, nil
 	}
 
