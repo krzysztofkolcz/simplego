@@ -573,7 +573,7 @@ func (h *GetTodoHandler) Handle(ctx context.Context, q GetTodoQuery) (*GetTodoRe
 | `application/command/` | unit z fake'ami | Testuj orchestrację bez bazy |
 | `application/query/` | unit z fake'ami | j.w. |
 | `infrastructure/repository/` | integracyjne | Cała logika to SQL — sens tylko z bazą |
-| `http/handler/` | unit / httptest | Mapowanie błędów na kody HTTP |
+| `http/handler/` | unit z fake portami + httptest | Mapowanie błędów domenowych na kody HTTP — bez bazy |
 | Wszystko razem | integracyjne (e2e) | Pewność że warstwy współpracują |
 
 ### Unit testy z fake'ami (application layer)
@@ -712,6 +712,71 @@ func TestCreateTodoHandler_Handle(t *testing.T) {
     })
 }
 ```
+
+### Unit testy HTTP handlerów (http/handler layer)
+
+Dzięki Input Ports (sekcja 18) `Server` przyjmuje interfejsy — można wstrzyknąć fake bez bazy danych.
+
+**Gdzie żyją fake'i:**
+
+```
+internal/http/handler/
+  fakes_test.go          ← 9 fake struct implementujących port interfaces (package handler)
+  todo_handler_test.go   ← 14 testów
+  tenant_handler_test.go ← 5 testów
+  user_handler_test.go   ← 5 testów
+```
+
+**Wzorzec fake portu** — prosta struct z konfigurowalnymi polami zwracanymi:
+
+```go
+// internal/http/handler/fakes_test.go
+type fakeCreateTodo struct {
+    id  uuid.UUID
+    err error
+}
+func (f *fakeCreateTodo) Handle(_ context.Context, _ appcommand.CreateTodoCommand) (uuid.UUID, error) {
+    return f.id, f.err
+}
+
+type fakeCompleteTodo struct{ err error }
+func (f *fakeCompleteTodo) Handle(_ context.Context, _ appcommand.CompleteTodoCommand) error {
+    return f.err
+}
+```
+
+**Wzorzec testu** — fake wstrzyknięty bezpośrednio w pole `Server`:
+
+```go
+func TestCompleteTodo_AlreadyCompleted_Returns409(t *testing.T) {
+    ts := httptest.NewServer(router.New(
+        &Server{completeTodo: &fakeCompleteTodo{err: domain.ErrAlreadyCompleted}},
+    ))
+    defer ts.Close()
+
+    req, _ := http.NewRequest(http.MethodPut,
+        ts.URL+"/v1/todos/"+uuid.New().String()+"/complete", nil)
+    req.Header.Set("X-Tenant-ID", "00000000-0000-0000-0000-000000000001")
+
+    resp, _ := http.DefaultClient.Do(req)
+    assert.Equal(t, http.StatusConflict, resp.StatusCode)
+}
+```
+
+`&Server{completeTodo: fake}` działa ponieważ testy są w `package handler` — mają dostęp do nieeksportowanych pól. Pozostałe pola `nil` — nie są wywołane przez ten test.
+
+**Pokrycie błędów domenowych:**
+
+| Błąd domenowy | Kod HTTP | Gdzie |
+|---|---|---|
+| `ErrInvalidTitle` | 400 | CreateTodo |
+| `ErrInvalidEmail` | 400 | CreateUser |
+| `ErrNotFound` | 404 | GetTodo, CompleteTodo, DeleteTodo, GetTenant, GetUser |
+| `ErrAlreadyCompleted` | 409 | CompleteTodo |
+| `ErrConflict` | 409 | CreateTenant, CreateUser |
+| `errors.New("db down")` | 500 | wszystkie |
+
+25 testów, ~20ms, zero połączeń z bazą danych.
 
 ---
 
@@ -1453,10 +1518,10 @@ infrastructure/usecase/
 - [x] Input Ports — `application/port/` + `infrastructure/usecase/` — domknięcie hexagonal architecture
 - [x] `ErrAlreadyCompleted` → 409 w OpenAPI spec i handlerze
 - [x] Domain Events `TodoCompleted` i `TodoDeleted` — `Complete()` i `Delete()` nagrywają eventy, handlery publikują po commicie
+- [x] Unit testy HTTP handlerów — 25 testów z fake portami, ~20ms, zero bazy danych
 
 ### Do zrobienia
 - [ ] `OutboxPublisher` — zapis eventów do tabeli DB w tej samej transakcji (gwarantowana dostawa)
-- [ ] Unit testy HTTP handlerów z fake portami (teraz możliwe bez bazy)
 - [ ] Middleware autoryzacji — JWT, wyciąganie tenant ID z tokena zamiast z nagłówka
 
 ### Diagram docelowej architektury z Event Sourcing
