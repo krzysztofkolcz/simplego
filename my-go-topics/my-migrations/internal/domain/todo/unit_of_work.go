@@ -3,5 +3,5 @@ package todo
 import "context"
 
 type UnitOfWork interface {
-	Execute(ctx context.Context, fn func(repo Repository) error) error
+	Execute(ctx context.Context, fn func(ctx context.Context, repo Repository) error) error
 }

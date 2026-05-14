@@ -33,11 +33,11 @@ type FakeTodoUoW struct {
 	Err  error // returned by Execute before calling fn
 }
 
-func (f *FakeTodoUoW) Execute(_ context.Context, fn func(todo.Repository) error) error {
+func (f *FakeTodoUoW) Execute(_ context.Context, fn func(context.Context, todo.Repository) error) error {
 	if f.Err != nil {
 		return f.Err
 	}
-	return fn(f.Repo)
+	return fn(context.Background(), f.Repo)
 }
 
 type FakeTodoRepo struct {

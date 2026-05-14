@@ -27,16 +27,17 @@ func NewTodoUnitOfWork(
 
 func (u *TodoUnitOfWork) Execute(
 	ctx context.Context,
-	fn func(repo todo.Repository) error,
+	fn func(ctx context.Context, repo todo.Repository) error,
 ) error {
 
 	return u.txManager.WithinTransaction(
 		ctx,
 		u.tenantSchema,
 		func(commandQ *commanddb.Queries) error {
+			txCtx := db.ContextWithTxQueries(ctx, commandQ)
 			queryQ := querydb.New(commandQ.DB())
 			repo := NewTodoRepository(commandQ, queryQ)
-			return fn(repo)
+			return fn(txCtx, repo)
 		},
 	)
 }

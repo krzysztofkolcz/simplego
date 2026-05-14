@@ -45,7 +45,7 @@ func TestCompleteTodoHandler_Handle(t *testing.T) {
 	id, err := command.NewCreateTodoHandler(uow, infraevent.NewLogPublisher()).Handle(ctx, command.CreateTodoCommand{Title: "read a book"})
 	require.NoError(t, err)
 
-	err = command.NewCompleteTodoHandler(uow).Handle(ctx, command.CompleteTodoCommand{ID: id})
+	err = command.NewCompleteTodoHandler(uow, infraevent.NewLogPublisher()).Handle(ctx, command.CompleteTodoCommand{ID: id})
 	require.NoError(t, err)
 
 	err = txManager.WithinTransactionReadonly(ctx, TenantSchema, func(queryQ *querydb.Queries) error {
@@ -68,7 +68,7 @@ func TestDeleteTodoHandler_Handle(t *testing.T) {
 	id, err := command.NewCreateTodoHandler(uow, infraevent.NewLogPublisher()).Handle(ctx, command.CreateTodoCommand{Title: "write tests"})
 	require.NoError(t, err)
 
-	err = command.NewDeleteTodoHandler(uow).Handle(ctx, command.DeleteTodoCommand{ID: id})
+	err = command.NewDeleteTodoHandler(uow, infraevent.NewLogPublisher()).Handle(ctx, command.DeleteTodoCommand{ID: id})
 	require.NoError(t, err)
 
 	err = txManager.WithinTransactionReadonly(ctx, TenantSchema, func(queryQ *querydb.Queries) error {

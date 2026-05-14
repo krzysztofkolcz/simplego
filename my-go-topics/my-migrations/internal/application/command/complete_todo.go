@@ -28,21 +28,17 @@ func (h *CompleteTodoHandler) Handle(
 	cmd CompleteTodoCommand,
 ) error {
 
-	var t *todo.Todo
-	err := h.uow.Execute(ctx, func(repo todo.Repository) error {
-		var err error
-		t, err = repo.GetByID(ctx, cmd.ID)
+	return h.uow.Execute(ctx, func(txCtx context.Context, repo todo.Repository) error {
+		t, err := repo.GetByID(txCtx, cmd.ID)
 		if err != nil {
 			return err
 		}
 		if err := t.Complete(); err != nil {
 			return err
 		}
-		return repo.Update(ctx, *t)
+		if err := repo.Update(txCtx, *t); err != nil {
+			return err
+		}
+		return h.publisher.Publish(txCtx, t.PullEvents())
 	})
-	if err != nil {
-		return err
-	}
-
-	return h.publisher.Publish(ctx, t.PullEvents())
 }

@@ -28,19 +28,15 @@ func (h *DeleteTodoHandler) Handle(
 	cmd DeleteTodoCommand,
 ) error {
 
-	var t *todo.Todo
-	err := h.uow.Execute(ctx, func(repo todo.Repository) error {
-		var err error
-		t, err = repo.GetByID(ctx, cmd.ID)
+	return h.uow.Execute(ctx, func(txCtx context.Context, repo todo.Repository) error {
+		t, err := repo.GetByID(txCtx, cmd.ID)
 		if err != nil {
 			return err
 		}
 		t.Delete()
-		return repo.Delete(ctx, cmd.ID)
+		if err := repo.Delete(txCtx, cmd.ID); err != nil {
+			return err
+		}
+		return h.publisher.Publish(txCtx, t.PullEvents())
 	})
-	if err != nil {
-		return err
-	}
-
-	return h.publisher.Publish(ctx, t.PullEvents())
 }

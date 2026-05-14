@@ -18,6 +18,7 @@ import (
 	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query"
 	infraevent "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/event"
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/usecase"
+	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/worker"
 	slogctx "github.com/veqryn/slog-context"
 )
 
@@ -60,7 +61,10 @@ func main() {
 	txManager := db.NewTxManager(pool)
 	commandQ := commanddb.New(pool)
 	queryQ := querydb.New(pool)
-	eventPublisher := infraevent.NewLogPublisher()
+	eventPublisher := infraevent.NewOutboxPublisher()
+
+	outboxWorker := worker.NewOutboxWorker(commandQ, 5*time.Second)
+	go outboxWorker.Run(ctx)
 
 	srv := handler.NewServer(
 		usecase.NewCreateTodoUseCase(txManager, eventPublisher),

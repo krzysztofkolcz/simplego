@@ -33,18 +33,14 @@ func (h *CreateTodoHandler) Handle(
 		return uuid.Nil, err
 	}
 
-	err = h.uow.Execute(ctx, func(repo todo.Repository) error {
-		return repo.Create(ctx, *t)
+	err = h.uow.Execute(ctx, func(txCtx context.Context, repo todo.Repository) error {
+		if err := repo.Create(txCtx, *t); err != nil {
+			return err
+		}
+		return h.publisher.Publish(txCtx, t.PullEvents())
 	})
 	if err != nil {
 		return uuid.Nil, err
-	}
-
-	// Publish after successful transaction.
-	// In production, replace with an OutboxPublisher that writes events
-	// to an outbox table in the same transaction for guaranteed delivery.
-	if err := h.publisher.Publish(ctx, t.PullEvents()); err != nil {
-		return t.ID, err
 	}
 
 	return t.ID, nil
