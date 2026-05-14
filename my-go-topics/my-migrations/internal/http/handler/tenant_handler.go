@@ -8,7 +8,6 @@ import (
 	appquery "github.com/krzysztofkolcz/mymigrations/internal/application/query"
 	"github.com/krzysztofkolcz/mymigrations/internal/domain"
 	httpapi "github.com/krzysztofkolcz/mymigrations/internal/http/api"
-	publicrepo "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/repository/public"
 )
 
 func (s *Server) CreateTenant(
@@ -16,8 +15,7 @@ func (s *Server) CreateTenant(
 	req httpapi.CreateTenantRequestObject,
 ) (httpapi.CreateTenantResponseObject, error) {
 
-	uow := publicrepo.NewTenantUnitOfWork(s.txManager)
-	id, err := appcommand.NewCreateTenantHandler(uow).Handle(ctx, appcommand.CreateTenantCommand{
+	id, err := s.createTenant.Handle(ctx, appcommand.CreateTenantCommand{
 		SchemaName: req.Body.SchemaName,
 	})
 	if err != nil {
@@ -35,8 +33,7 @@ func (s *Server) GetTenant(
 	req httpapi.GetTenantRequestObject,
 ) (httpapi.GetTenantResponseObject, error) {
 
-	repo := publicrepo.NewTenantRepository(s.commandQ, s.queryQ)
-	result, err := appquery.NewGetTenantHandler(repo).Handle(ctx, appquery.GetTenantQuery{
+	result, err := s.getTenant.Handle(ctx, appquery.GetTenantQuery{
 		ID: req.Id,
 	})
 	if err != nil {

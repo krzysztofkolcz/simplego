@@ -10,7 +10,8 @@ import (
 )
 
 type CreateTodoCommand struct {
-	Title string
+	TenantSchema string
+	Title        string
 }
 
 type CreateTodoHandler struct {

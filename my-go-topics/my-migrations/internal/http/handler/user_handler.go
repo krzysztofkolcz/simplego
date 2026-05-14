@@ -10,7 +10,6 @@ import (
 	appquery "github.com/krzysztofkolcz/mymigrations/internal/application/query"
 	"github.com/krzysztofkolcz/mymigrations/internal/domain"
 	httpapi "github.com/krzysztofkolcz/mymigrations/internal/http/api"
-	publicrepo "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/repository/public"
 )
 
 func (s *Server) CreateUser(
@@ -18,8 +17,7 @@ func (s *Server) CreateUser(
 	req httpapi.CreateUserRequestObject,
 ) (httpapi.CreateUserResponseObject, error) {
 
-	uow := publicrepo.NewUserUnitOfWork(s.txManager)
-	id, err := appcommand.NewCreateUserHandler(uow).Handle(ctx, appcommand.CreateUserCommand{
+	id, err := s.createUser.Handle(ctx, appcommand.CreateUserCommand{
 		Email: string(req.Body.Email),
 	})
 	if err != nil {
@@ -40,8 +38,7 @@ func (s *Server) GetUser(
 	req httpapi.GetUserRequestObject,
 ) (httpapi.GetUserResponseObject, error) {
 
-	repo := publicrepo.NewUserRepository(s.commandQ, s.queryQ)
-	result, err := appquery.NewGetUserHandler(repo).Handle(ctx, appquery.GetUserQuery{
+	result, err := s.getUser.Handle(ctx, appquery.GetUserQuery{
 		ID: req.Id,
 	})
 	if err != nil {

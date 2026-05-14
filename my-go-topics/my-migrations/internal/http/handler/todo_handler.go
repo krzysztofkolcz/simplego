@@ -8,7 +8,6 @@ import (
 	appquery "github.com/krzysztofkolcz/mymigrations/internal/application/query"
 	"github.com/krzysztofkolcz/mymigrations/internal/domain"
 	httpapi "github.com/krzysztofkolcz/mymigrations/internal/http/api"
-	tenantrepo "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/repository/tenant"
 )
 
 func (s *Server) CreateTodo(
@@ -16,9 +15,9 @@ func (s *Server) CreateTodo(
 	req httpapi.CreateTodoRequestObject,
 ) (httpapi.CreateTodoResponseObject, error) {
 
-	uow := tenantrepo.NewTodoUnitOfWork(s.txManager, tenantSchema(req.Params.XTenantID))
-	id, err := appcommand.NewCreateTodoHandler(uow, s.eventPublisher).Handle(ctx, appcommand.CreateTodoCommand{
-		Title: req.Body.Title,
+	id, err := s.createTodo.Handle(ctx, appcommand.CreateTodoCommand{
+		TenantSchema: tenantSchema(req.Params.XTenantID),
+		Title:        req.Body.Title,
 	})
 	if err != nil {
 		if errors.Is(err, domain.ErrInvalidTitle) {
@@ -35,9 +34,9 @@ func (s *Server) GetTodo(
 	req httpapi.GetTodoRequestObject,
 ) (httpapi.GetTodoResponseObject, error) {
 
-	repo := tenantrepo.NewTodoReadRepository(s.txManager, tenantSchema(req.Params.XTenantID))
-	result, err := appquery.NewGetTodoHandler(repo).Handle(ctx, appquery.GetTodoQuery{
-		ID: req.Id,
+	result, err := s.getTodo.Handle(ctx, appquery.GetTodoQuery{
+		TenantSchema: tenantSchema(req.Params.XTenantID),
+		ID:           req.Id,
 	})
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
@@ -59,9 +58,9 @@ func (s *Server) CompleteTodo(
 	req httpapi.CompleteTodoRequestObject,
 ) (httpapi.CompleteTodoResponseObject, error) {
 
-	uow := tenantrepo.NewTodoUnitOfWork(s.txManager, tenantSchema(req.Params.XTenantID))
-	err := appcommand.NewCompleteTodoHandler(uow).Handle(ctx, appcommand.CompleteTodoCommand{
-		ID: req.Id,
+	err := s.completeTodo.Handle(ctx, appcommand.CompleteTodoCommand{
+		TenantSchema: tenantSchema(req.Params.XTenantID),
+		ID:           req.Id,
 	})
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
@@ -78,9 +77,9 @@ func (s *Server) DeleteTodo(
 	req httpapi.DeleteTodoRequestObject,
 ) (httpapi.DeleteTodoResponseObject, error) {
 
-	uow := tenantrepo.NewTodoUnitOfWork(s.txManager, tenantSchema(req.Params.XTenantID))
-	err := appcommand.NewDeleteTodoHandler(uow).Handle(ctx, appcommand.DeleteTodoCommand{
-		ID: req.Id,
+	err := s.deleteTodo.Handle(ctx, appcommand.DeleteTodoCommand{
+		TenantSchema: tenantSchema(req.Params.XTenantID),
+		ID:           req.Id,
 	})
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
@@ -92,19 +91,19 @@ func (s *Server) DeleteTodo(
 	return httpapi.DeleteTodo204Response{}, nil
 }
 
-
 func (s *Server) ListTodos(
 	ctx context.Context,
 	req httpapi.ListTodosRequestObject,
 ) (httpapi.ListTodosResponseObject, error) {
 
-	repo := tenantrepo.NewTodoReadRepository(s.txManager, tenantSchema(req.Params.XTenantID))
-	list, err := appquery.NewListTodosHandler(repo).Handle(ctx, appquery.ListTodosQuery{})
+	list, err := s.listTodos.Handle(ctx, appquery.ListTodosQuery{
+		TenantSchema: tenantSchema(req.Params.XTenantID),
+	})
 	if err != nil {
 		return httpapi.ListTodos500JSONResponse{N500JSONResponse: internalError(err)}, nil
 	}
 
-	var responses = httpapi.ListTodos200JSONResponse{}
+	responses := httpapi.ListTodos200JSONResponse{}
 	for _, l := range list {
 		responses = append(responses, httpapi.Todo{
 			Completed: l.Completed,

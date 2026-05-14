@@ -9,7 +9,8 @@ import (
 )
 
 type DeleteTodoCommand struct {
-	ID uuid.UUID
+	TenantSchema string
+	ID           uuid.UUID
 }
 
 type DeleteTodoHandler struct {

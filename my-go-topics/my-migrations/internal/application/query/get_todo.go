@@ -10,7 +10,8 @@ import (
 )
 
 type GetTodoQuery struct {
-	ID uuid.UUID
+	TenantSchema string
+	ID           uuid.UUID
 }
 
 type GetTodoResult struct {

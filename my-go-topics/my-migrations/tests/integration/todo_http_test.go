@@ -11,15 +11,32 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
-	infraevent "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/event"
 	"github.com/krzysztofkolcz/mymigrations/internal/http/handler"
 	"github.com/krzysztofkolcz/mymigrations/internal/http/router"
+	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
+	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command"
+	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query"
+	infraevent "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/event"
+	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/usecase"
 )
 
 func newTestServer() *httptest.Server {
 	txManager := db.NewTxManager(ConnectionPool)
-	srv := handler.NewServer(txManager, ConnectionPool, infraevent.NewLogPublisher())
+	commandQ := commanddb.New(ConnectionPool)
+	queryQ := querydb.New(ConnectionPool)
+	eventPublisher := infraevent.NewLogPublisher()
+
+	srv := handler.NewServer(
+		usecase.NewCreateTodoUseCase(txManager, eventPublisher),
+		usecase.NewCompleteTodoUseCase(txManager),
+		usecase.NewDeleteTodoUseCase(txManager),
+		usecase.NewGetTodoUseCase(txManager),
+		usecase.NewListTodosUseCase(txManager),
+		usecase.NewCreateTenantUseCase(txManager),
+		usecase.NewGetTenantUseCase(commandQ, queryQ),
+		usecase.NewCreateUserUseCase(txManager),
+		usecase.NewGetUserUseCase(commandQ, queryQ),
+	)
 	return httptest.NewServer(router.New(srv))
 }
 

@@ -8,7 +8,9 @@ import (
 	"github.com/krzysztofkolcz/mymigrations/internal/domain/todo"
 )
 
-type ListTodosQuery struct {}
+type ListTodosQuery struct {
+	TenantSchema string
+}
 
 
 type TodoResult struct {

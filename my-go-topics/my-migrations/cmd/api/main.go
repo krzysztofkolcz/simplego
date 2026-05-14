@@ -11,10 +11,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
-	infraevent "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/event"
 	"github.com/krzysztofkolcz/mymigrations/internal/http/handler"
 	"github.com/krzysztofkolcz/mymigrations/internal/http/router"
+	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
+	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command"
+	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query"
+	infraevent "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/event"
+	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/usecase"
 	slogctx "github.com/veqryn/slog-context"
 )
 
@@ -55,7 +58,21 @@ func main() {
 
 	// Wiring
 	txManager := db.NewTxManager(pool)
-	srv := handler.NewServer(txManager, pool, infraevent.NewLogPublisher())
+	commandQ := commanddb.New(pool)
+	queryQ := querydb.New(pool)
+	eventPublisher := infraevent.NewLogPublisher()
+
+	srv := handler.NewServer(
+		usecase.NewCreateTodoUseCase(txManager, eventPublisher),
+		usecase.NewCompleteTodoUseCase(txManager),
+		usecase.NewDeleteTodoUseCase(txManager),
+		usecase.NewGetTodoUseCase(txManager),
+		usecase.NewListTodosUseCase(txManager),
+		usecase.NewCreateTenantUseCase(txManager),
+		usecase.NewGetTenantUseCase(commandQ, queryQ),
+		usecase.NewCreateUserUseCase(txManager),
+		usecase.NewGetUserUseCase(commandQ, queryQ),
+	)
 	httpHandler := router.New(srv)
 
 	// HTTP server
