@@ -62,6 +62,19 @@ func MigrateAllTenants(ctx context.Context, pool *pgxpool.Pool, sqlDb *sql.DB, d
 			return err
 		}
 
+		var exists bool
+		if err := pool.QueryRow(ctx,
+			`SELECT EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = $1)`,
+			schema,
+		).Scan(&exists); err != nil {
+			logger.ErrorContext(ctx, "schema existence check failed", "schema", schema, "err", err)
+			return err
+		}
+		if !exists {
+			logger.WarnContext(ctx, "skipping tenant: schema does not exist", "schema", schema)
+			continue
+		}
+
 		if err := MigrateSingleTenantWrapper(ctx, sqlDb, id, schema, logger); err != nil {
 			logger.ErrorContext(ctx, "migrate tenant failed", "schema", schema, "err", err)
 			failed = append(failed, schema)

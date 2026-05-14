@@ -29,6 +29,7 @@ var TenantId string
 var TenantSchema string
 var ExpectedTables = []string{
 	"todos",
+	"outbox_events",
 }
 
 func TestMain(m *testing.M) {

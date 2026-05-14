@@ -63,7 +63,7 @@ func main() {
 	queryQ := querydb.New(pool)
 	eventPublisher := infraevent.NewOutboxPublisher()
 
-	outboxWorker := worker.NewOutboxWorker(commandQ, 5*time.Second)
+	outboxWorker := worker.NewOutboxWorker(txManager, commandQ, 5*time.Second)
 	go outboxWorker.Run(ctx)
 
 	srv := handler.NewServer(

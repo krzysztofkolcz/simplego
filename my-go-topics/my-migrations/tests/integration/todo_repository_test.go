@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 
+	"github.com/krzysztofkolcz/mymigrations/internal/domain"
 	"github.com/krzysztofkolcz/mymigrations/internal/domain/todo"
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
 	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command"
@@ -115,7 +115,7 @@ func TestTodoRepository_Delete(t *testing.T) {
 		repo := tenantrepo.NewTodoRepository(nil, queryQ)
 
 		_, err := repo.GetByID(ctx, id)
-		require.ErrorIs(t, err, pgx.ErrNoRows)
+		require.ErrorIs(t, err, domain.ErrNotFound)
 
 		return nil
 	})

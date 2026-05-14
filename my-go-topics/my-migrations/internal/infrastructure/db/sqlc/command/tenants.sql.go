@@ -43,6 +43,30 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Ten
 	return i, err
 }
 
+const listTenantSchemas = `-- name: ListTenantSchemas :many
+SELECT schema_name FROM tenants
+`
+
+func (q *Queries) ListTenantSchemas(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, listTenantSchemas)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var schema_name string
+		if err := rows.Scan(&schema_name); err != nil {
+			return nil, err
+		}
+		items = append(items, schema_name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateTenantMigrationStatus = `-- name: UpdateTenantMigrationStatus :exec
 UPDATE tenants
 SET

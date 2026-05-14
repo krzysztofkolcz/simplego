@@ -26,7 +26,7 @@ func TestPublicMigrations(t *testing.T) {
 
 	assertTablesExists(t, ctx, ConnectionPool, TenantSchema, ExpectedTables)
 
-	assertMigrationVersion(t, ctx, ConnectionPool, TenantSchema, 1)
+	assertMigrationVersion(t, ctx, ConnectionPool, TenantSchema, 2)
 }
 
 func TestTenantMigrations(t *testing.T) {
@@ -78,19 +78,25 @@ func TestTenantTableWorks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// ustawiamy search_path
-	_, err = ConnectionPool.Exec(ctx,
-		fmt.Sprintf(`SET search_path TO %s`, schema),
-	)
+	// używamy transakcji żeby SET LOCAL search_path nie zanieczyszczało puli połączeń
+	tx, err := ConnectionPool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx, fmt.Sprintf(`SET LOCAL search_path TO "%s"`, schema))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = ConnectionPool.Exec(ctx, `
-		INSERT INTO todos (id, title) VALUES (gen_random_uuid(), 'test')
-	`)
+	_, err = tx.Exec(ctx, `INSERT INTO todos (id, title) VALUES (gen_random_uuid(), 'test')`)
 	if err != nil {
 		t.Fatal("insert failed -> migracja jest błędna")
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
 	}
 }
 

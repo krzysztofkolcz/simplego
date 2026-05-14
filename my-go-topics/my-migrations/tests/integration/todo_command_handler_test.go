@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 
 	"github.com/krzysztofkolcz/mymigrations/internal/application/command"
+	"github.com/krzysztofkolcz/mymigrations/internal/domain"
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
 	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query"
 	infraevent "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/event"
@@ -75,7 +75,7 @@ func TestDeleteTodoHandler_Handle(t *testing.T) {
 		repo := tenantrepo.NewTodoRepository(nil, queryQ)
 
 		_, err := repo.GetByID(ctx, id)
-		require.ErrorIs(t, err, pgx.ErrNoRows)
+		require.ErrorIs(t, err, domain.ErrNotFound)
 
 		return nil
 	})

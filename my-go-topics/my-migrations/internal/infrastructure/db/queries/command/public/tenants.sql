@@ -16,3 +16,6 @@ SET
     migration_error = $3,
     migration_updated_at = NOW()
 WHERE id = $1;
+
+-- name: ListTenantSchemas :many
+SELECT schema_name FROM tenants;
