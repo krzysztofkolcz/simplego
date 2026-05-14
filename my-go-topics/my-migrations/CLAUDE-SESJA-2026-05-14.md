@@ -200,7 +200,7 @@ OutboxPublisher (commit: My go topics - DDD OutboxPublisher)
 
 Stan na jutro
 
-Wszystko zacommitowane. 8 nowych commitów (dziś) ahead of origin/main.
+Wszystko zacommitowane. 11 commitów (dziś) ahead of origin/main.
 DDD-CLAUDE.md zaktualizowany (sekcje 14, 16, 18, 19, 20).
 
 ---
