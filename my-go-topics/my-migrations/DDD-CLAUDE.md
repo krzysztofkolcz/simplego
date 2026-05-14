@@ -24,7 +24,8 @@ Stack: Go, PostgreSQL, sqlc, golang-migrate, oapi-codegen, testcontainers.
 15. [Value Objects](#15-value-objects)
 16. [Domain Events](#16-domain-events)
 17. [ReadRepository — odczyty bez UoW](#17-readrepository)
-18. [Kolejne kroki](#18-kolejne-kroki)
+18. [Input Ports — domknięcie hexagonal architecture](#18-input-ports)
+19. [Kolejne kroki](#19-kolejne-kroki)
 
 ---
 
@@ -45,6 +46,7 @@ internal/
   application/               ← orchestracja use case'ów
     command/                 ← operacje mutujące stan
     query/                   ← operacje odczytujące stan
+    port/                    ← interfejsy Input Ports (use case interfaces)
 
   domain/                    ← logika biznesowa, zero zewnętrznych zależności
     todo/
@@ -54,6 +56,8 @@ internal/
   infrastructure/            ← szczegóły techniczne
     db/                      ← pool, migracje, TxManager, sqlc
     repository/              ← implementacje interfejsów domenowych
+    usecase/                 ← adaptery portów: łączą command/query handlery z infrastrukturą
+    event/                   ← implementacje EventPublisher
 
 tests/
   integration/               ← testy z prawdziwą bazą (testcontainers)
@@ -62,16 +66,20 @@ tests/
 ### Zasada zależności
 
 ```
-http → application → domain ← infrastructure
+http → port ← usecase (infra)
+       ↓            ↓
+  application → domain ← repository (infra)
 ```
 
 - `domain` importuje tylko stdlib, uuid, time — zero zewnętrznych pakietów
 - `application` importuje tylko `domain`
-- `infrastructure` importuje `domain` i zewnętrzne biblioteki (pgx, sqlc)
-- `http` importuje `application`, `domain`, `infrastructure`
-- `cmd/` importuje wszystko — to jedyny punkt wiring
+- `application/port` importuje `application/command` i `application/query` — definiuje interfejsy use case'ów
+- `infrastructure/repository` importuje `domain` i pgx/sqlc
+- `infrastructure/usecase` importuje `application/port`, `application/command`, `application/query`, `infrastructure/repository` — łączy warstwy
+- `http/handler` importuje tylko `application/port` — zero importów infrastruktury
+- `cmd/` importuje wszystko — jedyny punkt wiringu
 
-**Dlaczego to ważne:** możesz podmienić całą bazę danych (np. zmienić z PostgreSQL na MySQL) dotykając tylko `infrastructure/` — `domain` i `application` zostają bez zmian.
+**Dlaczego to ważne:** możesz podmienić całą bazę danych (np. zmienić z PostgreSQL na MySQL) dotykając tylko `infrastructure/` — `domain`, `application` i `http/handler` zostają bez zmian. HTTP handler nie wie jak use case jest zaimplementowany — zna tylko interfejs.
 
 ---
 
@@ -482,7 +490,10 @@ Jeden plik = jeden command. Schemat zawsze taki sam:
 ```go
 // internal/application/command/create_todo.go
 
-type CreateTodoCommand struct { Title string }
+type CreateTodoCommand struct {
+    TenantSchema string   // schemat PostgreSQL tenanta — wypełniany przez use case adapter
+    Title        string
+}
 
 type CreateTodoHandler struct {
     uow       todo.UnitOfWork
@@ -502,6 +513,12 @@ func (h *CreateTodoHandler) Handle(ctx context.Context, cmd CreateTodoCommand) (
     return t.ID, nil
 }
 ```
+
+`TenantSchema` jest dodane do wszystkich command/query operacji tenant-scoped:
+- `CreateTodoCommand`, `CompleteTodoCommand`, `DeleteTodoCommand`
+- `GetTodoQuery`, `ListTodosQuery`
+
+Handler aplikacyjny nie używa `TenantSchema` bezpośrednio — dostaje już skonfigurowany `UoW`. Pole jest używane przez use case adapter w warstwie infrastruktury (sekcja 18).
 
 `CompleteTodo` stosuje wzorzec load → mutate → save:
 
@@ -725,23 +742,31 @@ internal/http/
 ```go
 // internal/http/handler/server.go
 type Server struct {
-    txManager      *db.TxManager
-    queryQ         *querydb.Queries    // pool-backed, dla public schema reads
-    commandQ       *commanddb.Queries  // pool-backed, dla public schema reads
-    eventPublisher domain.EventPublisher
+    createTodo   port.CreateTodoPort
+    completeTodo port.CompleteTodoPort
+    deleteTodo   port.DeleteTodoPort
+    getTodo      port.GetTodoPort
+    listTodos    port.ListTodosPort
+    createTenant port.CreateTenantPort
+    getTenant    port.GetTenantPort
+    createUser   port.CreateUserPort
+    getUser      port.GetUserPort
 }
 
-func NewServer(txManager *db.TxManager, pool *pgxpool.Pool, eventPublisher domain.EventPublisher) *Server {
-    return &Server{
-        txManager:      txManager,
-        queryQ:         querydb.New(pool),
-        commandQ:       commanddb.New(pool),
-        eventPublisher: eventPublisher,
-    }
-}
+func NewServer(
+    createTodo   port.CreateTodoPort,
+    completeTodo port.CompleteTodoPort,
+    deleteTodo   port.DeleteTodoPort,
+    getTodo      port.GetTodoPort,
+    listTodos    port.ListTodosPort,
+    createTenant port.CreateTenantPort,
+    getTenant    port.GetTenantPort,
+    createUser   port.CreateUserPort,
+    getUser      port.GetUserPort,
+) *Server { ... }
 ```
 
-Queries dla public schema (tenants, users) używają pola bezpośrednio z pool — nie potrzebują transakcji z SET search_path, bo public jest domyślnym schematem.
+`Server` zna tylko interfejsy portów — zero importów `db`, `tenantrepo`, `publicrepo`. Cała infrastruktura jest schowana za interfejsami. Patrz sekcja 18.
 
 ### Metody na rozdzielonych plikach
 
@@ -750,9 +775,9 @@ Go pozwala metodom jednego typu żyć w różnych plikach tego samego pakietu. `
 ```go
 // internal/http/handler/todo_handler.go
 func (s *Server) CreateTodo(ctx context.Context, req httpapi.CreateTodoRequestObject) (httpapi.CreateTodoResponseObject, error) {
-    uow := tenantrepo.NewTodoUnitOfWork(s.txManager, tenantSchema(req.Params.XTenantID))
-    id, err := appcommand.NewCreateTodoHandler(uow, s.eventPublisher).Handle(ctx, appcommand.CreateTodoCommand{
-        Title: req.Body.Title,
+    id, err := s.createTodo.Handle(ctx, appcommand.CreateTodoCommand{
+        TenantSchema: tenantSchema(req.Params.XTenantID),
+        Title:        req.Body.Title,
     })
     if err != nil {
         if errors.Is(err, domain.ErrInvalidTitle) {
@@ -764,12 +789,14 @@ func (s *Server) CreateTodo(ctx context.Context, req httpapi.CreateTodoRequestOb
 }
 ```
 
-Query handlery używają `ReadRepository` (per-metoda transakcja read-only) zamiast `UoW`:
+Query handlery analogicznie — tylko wywołanie portu, bez tworzenia repozytoriów:
 
 ```go
 func (s *Server) GetTodo(ctx context.Context, req httpapi.GetTodoRequestObject) (httpapi.GetTodoResponseObject, error) {
-    repo := tenantrepo.NewTodoReadRepository(s.txManager, tenantSchema(req.Params.XTenantID))
-    result, err := appquery.NewGetTodoHandler(repo).Handle(ctx, appquery.GetTodoQuery{ID: req.Id})
+    result, err := s.getTodo.Handle(ctx, appquery.GetTodoQuery{
+        TenantSchema: tenantSchema(req.Params.XTenantID),
+        ID:           req.Id,
+    })
     if err != nil {
         if errors.Is(err, domain.ErrNotFound) { return httpapi.GetTodo404JSONResponse{...}, nil }
         return httpapi.GetTodo500JSONResponse{...}, nil
@@ -894,11 +921,24 @@ func main() {
     pool, _ := db.NewPool(ctx, db.Config{DatabaseURL: os.Getenv("DATABASE_URL"), ...}, logger)
     defer pool.Close()
 
-    // 4. Wiring warstw
-    txManager := db.NewTxManager(pool)
-    publisher := infraevent.NewLogPublisher()
-    srv := handler.NewServer(txManager, pool, publisher)   // warstwa HTTP
-    httpHandler := router.New(srv)                          // middleware + routing
+    // 4. Wiring warstw — use case adaptery implementują port interfaces
+    txManager     := db.NewTxManager(pool)
+    commandQ      := commanddb.New(pool)
+    queryQ        := querydb.New(pool)
+    eventPublisher := infraevent.NewLogPublisher()
+
+    srv := handler.NewServer(
+        usecase.NewCreateTodoUseCase(txManager, eventPublisher),
+        usecase.NewCompleteTodoUseCase(txManager),
+        usecase.NewDeleteTodoUseCase(txManager),
+        usecase.NewGetTodoUseCase(txManager),
+        usecase.NewListTodosUseCase(txManager),
+        usecase.NewCreateTenantUseCase(txManager),
+        usecase.NewGetTenantUseCase(commandQ, queryQ),
+        usecase.NewCreateUserUseCase(txManager),
+        usecase.NewGetUserUseCase(commandQ, queryQ),
+    )
+    httpHandler := router.New(srv)   // middleware + routing
 
     // 5. HTTP server
     httpServer := &http.Server{Addr: ":8080", Handler: httpHandler, ...}
@@ -910,11 +950,11 @@ func main() {
 }
 ```
 
-### Dlaczego UoW jest tworzony per-request, nie raz przy starcie?
+### Dlaczego use case adaptery są singletonami, choć UoW tworzone per-request?
 
-`TodoUnitOfWork` przechowuje `tenantSchema` — wartość specyficzną dla konkretnego requestu (z nagłówka `X-Tenant-ID`). Nie można go zbudować przy starcie aplikacji.
+`UnitOfWork` wymaga `tenantSchema` (specyficznego dla requestu) — ale use case adapter tworzy `UoW` dopiero w metodzie `Handle()`, na podstawie pola `cmd.TenantSchema`. Adapter sam jest bezstanowy i może żyć przez cały czas życia serwera.
 
-`TxManager` jest singletonem — tworzony raz, wstrzykiwany wszędzie.
+`TxManager`, `commandQ`, `queryQ` — singletonem. Use case adaptery — singletonami. `UnitOfWork` — tworzony per-request wewnątrz adaptera.
 
 ---
 
@@ -936,41 +976,46 @@ Przykład: `POST /v1/todos` z nagłówkiem `X-Tenant-ID: abc-123`
                            — wywołuje Server.CreateTodo(ctx, CreateTodoRequestObject{...})
        ↓
 6. todo_handler.go         — tenantSchema("abc-123") → "tenant_abc_123"
-                           — tworzy TodoUnitOfWork(txManager, "tenant_abc_123")
-                           — tworzy CreateTodoHandler(uow)
-                           — wywołuje handler.Handle(ctx, CreateTodoCommand{Title: "buy milk"})
+                           — wywołuje s.createTodo.Handle(ctx, CreateTodoCommand{
+                               TenantSchema: "tenant_abc_123", Title: "buy milk"
+                             })
+                           — (createTodo to port.CreateTodoPort — wstrzyknięty przez NewServer)
        ↓
-7. create_todo.go          — t, err := todo.NewTodo(uuid.New(), "buy milk")
+7. createTodoUseCase.go    — uow := tenantrepo.NewTodoUnitOfWork(txManager, "tenant_abc_123")
+                           — wywołuje CreateTodoHandler(uow, publisher).Handle(ctx, cmd)
+                           — (use case adapter w infrastructure/usecase/ łączy port z infrastrukturą)
+       ↓
+8. create_todo.go          — t, err := todo.NewTodo(uuid.New(), "buy milk")
                              (NewTodo waliduje tytuł, nagrywa TodoCreated event)
        ↓
-8. create_todo.go          — uow.Execute(ctx, fn)
+9. create_todo.go          — uow.Execute(ctx, fn)
        ↓
-9. unit_of_work.go         — txManager.WithinTransaction(ctx, "tenant_abc_123", fn)
+10. unit_of_work.go        — txManager.WithinTransaction(ctx, "tenant_abc_123", fn)
        ↓
-10. tx.go                  — BEGIN
+11. tx.go                  — BEGIN
                            — SET LOCAL search_path = "tenant_abc_123"
                            — commandQ := commanddb.New(tx)
                            — fn(commandQ)
        ↓
-11. todo_repository.go     — commandQ.CreateTodo(ctx, CreateTodoParams{ID: uuid, Title: "buy milk"})
+12. todo_repository.go     — commandQ.CreateTodo(ctx, CreateTodoParams{ID: uuid, Title: "buy milk"})
        ↓
-12. PostgreSQL             — INSERT INTO todos (id, title) VALUES (...)
+13. PostgreSQL             — INSERT INTO todos (id, title) VALUES (...)
                              (w schemacie tenant_abc_123)
        ↓
-13. tx.go                  — COMMIT
+14. tx.go                  — COMMIT
        ↓
-14. create_todo.go         — publisher.Publish(ctx, t.PullEvents())
+15. create_todo.go         — publisher.Publish(ctx, t.PullEvents())
                              (TodoCreated event — po commicie, poza transakcją)
        ↓
-15. create_todo.go         — zwraca (id, nil)
+16. create_todo.go         — zwraca (id, nil)
        ↓
-16. todo_handler.go        — zwraca CreateTodo201JSONResponse{Id: id}
+17. todo_handler.go        — zwraca CreateTodo201JSONResponse{Id: id}
        ↓
-17. oapi-codegen           — serializuje do JSON, ustawia status 201
+18. oapi-codegen           — serializuje do JSON, ustawia status 201
        ↓
-18. Logging middleware     — loguje "request completed" {status: 201, duration: 3ms}
+19. Logging middleware     — loguje "request completed" {status: 201, duration: 3ms}
        ↓
-19. HTTP response 201 {"id": "..."}
+20. HTTP response 201 {"id": "..."}
 ```
 
 ---
@@ -1198,9 +1243,145 @@ Każda metoda chowa `WithinTransactionReadonly` wewnętrznie — wywołujący ni
 
 ---
 
-## 18. Kolejne kroki
+## 18. Input Ports
 
-### Zrobione (sesje 2026-05-12 i 2026-05-13)
+Input Port to interfejs use case'u — granica między warstwą prezentacji (HTTP) a warstwą aplikacyjną. To ostatni element hexagonal architecture (Ports & Adapters).
+
+### Problem przed refaktorem
+
+HTTP handler tworzył zależności infrastrukturalne per-request:
+
+```go
+// PRZED — handler znał infrastrukturę
+func (s *Server) CreateTodo(ctx context.Context, req ...) (...) {
+    uow := tenantrepo.NewTodoUnitOfWork(s.txManager, tenantSchema(req.Params.XTenantID))
+    id, err := appcommand.NewCreateTodoHandler(uow, s.eventPublisher).Handle(...)
+}
+// Server przechowywał: txManager, queryQ, commandQ, eventPublisher
+```
+
+Wyciek: `http/handler` importował `infrastructure/repository/tenant` i `infrastructure/db`.
+
+### Rozwiązanie: Input Port Interface
+
+```go
+// internal/application/port/todo.go
+type CreateTodoPort interface {
+    Handle(ctx context.Context, cmd appcommand.CreateTodoCommand) (uuid.UUID, error)
+}
+
+type CompleteTodoPort interface {
+    Handle(ctx context.Context, cmd appcommand.CompleteTodoCommand) error
+}
+
+type GetTodoPort interface {
+    Handle(ctx context.Context, q appquery.GetTodoQuery) (*appquery.GetTodoResult, error)
+}
+
+// ... analogicznie: DeleteTodoPort, ListTodosPort, CreateTenantPort, GetTenantPort,
+//                   CreateUserPort, GetUserPort
+```
+
+### Use Case Adapter — implementacja portu w infrastrukturze
+
+Use case adapter łączy port interface z istniejącymi handlerami aplikacyjnymi:
+
+```go
+// internal/infrastructure/usecase/todo_use_case.go
+
+type createTodoUseCase struct {
+    txManager      *db.TxManager
+    eventPublisher domain.EventPublisher
+}
+
+func NewCreateTodoUseCase(txManager *db.TxManager, publisher domain.EventPublisher) port.CreateTodoPort {
+    return &createTodoUseCase{txManager: txManager, eventPublisher: publisher}
+}
+
+func (u *createTodoUseCase) Handle(ctx context.Context, cmd appcommand.CreateTodoCommand) (uuid.UUID, error) {
+    uow := tenantrepo.NewTodoUnitOfWork(u.txManager, cmd.TenantSchema)   // tworzy UoW na podstawie TenantSchema z cmd
+    return appcommand.NewCreateTodoHandler(uow, u.eventPublisher).Handle(ctx, cmd)
+}
+```
+
+Dla query (read-only) analogicznie:
+
+```go
+type getTodoUseCase struct {
+    txManager *db.TxManager
+}
+
+func (u *getTodoUseCase) Handle(ctx context.Context, q appquery.GetTodoQuery) (*appquery.GetTodoResult, error) {
+    repo := tenantrepo.NewTodoReadRepository(u.txManager, q.TenantSchema)
+    return appquery.NewGetTodoHandler(repo).Handle(ctx, q)
+}
+```
+
+Adaptery dla operacji public (bez tenanta) nie potrzebują `TenantSchema`:
+
+```go
+type getTenantUseCase struct {
+    repo tenant.Repository   // repo budowane raz w konstruktorze, bo jest bezstanowe
+}
+
+func NewGetTenantUseCase(commandQ *commanddb.Queries, queryQ *querydb.Queries) port.GetTenantPort {
+    return &getTenantUseCase{repo: publicrepo.NewTenantRepository(commandQ, queryQ)}
+}
+
+func (u *getTenantUseCase) Handle(ctx context.Context, q appquery.GetTenantQuery) (*appquery.GetTenantResult, error) {
+    return appquery.NewGetTenantHandler(u.repo).Handle(ctx, q)
+}
+```
+
+### Przepływ zależności po refaktorze
+
+```
+http/handler          application/port           infrastructure/usecase
+─────────────         ────────────────           ──────────────────────
+Server {              CreateTodoPort ←────────── createTodoUseCase {
+  createTodo ──────►   Handle(ctx, cmd)             txManager
+}                     }                             eventPublisher
+                                                    Handle() {
+                                                      uow = NewTodoUnitOfWork(...)
+                                                      handler.Handle(ctx, cmd)
+                                                    }
+```
+
+### Korzyść: unit testowalność HTTP handlerów
+
+Po refaktorze można testować HTTP handler bez bazy danych:
+
+```go
+type fakeTodo struct{ returnID uuid.UUID }
+func (f *fakeTodo) Handle(_ context.Context, _ appcommand.CreateTodoCommand) (uuid.UUID, error) {
+    return f.returnID, nil
+}
+
+srv := handler.NewServer(&fakeTodo{returnID: someID}, ...)
+ts := httptest.NewServer(router.New(srv))
+// test mapowania HTTP — 201, 400, 500 — bez żadnej bazy danych
+```
+
+### Gdzie co mieszka
+
+```
+application/port/
+  todo.go      ← 5 interfejsów: CreateTodoPort, CompleteTodoPort, DeleteTodoPort,
+                                 GetTodoPort, ListTodosPort
+  tenant.go    ← 2 interfejsy:  CreateTenantPort, GetTenantPort
+  user.go      ← 2 interfejsy:  CreateUserPort, GetUserPort
+
+infrastructure/usecase/
+  todo_use_case.go    ← 5 adapterów (struct + NewXxx + Handle)
+  tenant_use_case.go  ← 2 adaptery
+  user_use_case.go    ← 2 adaptery
+```
+
+---
+
+## 19. Kolejne kroki
+
+### Zrobione (sesje 2026-05-12, 2026-05-13, 2026-05-14)
 - [x] `ListTodos` query handler + ReadRepository
 - [x] `ErrConflict` (409) dla CreateTenant i CreateUser
 - [x] `CreatedAt` w GetTodoResult i ListTodosResult
@@ -1209,12 +1390,13 @@ Każda metoda chowa `WithinTransactionReadonly` wewnętrznie — wywołujący ni
 - [x] Aggregate z inwariantami (`NewTodo`, `Complete()`)
 - [x] Value Object `Email`
 - [x] Domain Events (`TodoCreated`, `LogPublisher`, `FakeEventPublisher`)
+- [x] Input Ports — `application/port/` + `infrastructure/usecase/` — domknięcie hexagonal architecture
 
 ### Do zrobienia
 - [ ] `CompleteTodo` brak 409 w OpenAPI spec — `ErrAlreadyCompleted` wraca jako 500
-- [ ] `OutboxPublisher` — zapis eventów do tabeli DB w tej samej transakcji
 - [ ] Domain events dla innych agregatów: `TodoCompleted`, `TodoDeleted`
-- [ ] Input ports (interfejsy warstwy aplikacyjnej) — dla pełnej hexagonal architecture
+- [ ] `OutboxPublisher` — zapis eventów do tabeli DB w tej samej transakcji (gwarantowana dostawa)
+- [ ] Unit testy HTTP handlerów z fake portami (teraz możliwe bez bazy)
 - [ ] Middleware autoryzacji — JWT, wyciąganie tenant ID z tokena zamiast z nagłówka
 
 ### Diagram docelowej architektury z Event Sourcing
