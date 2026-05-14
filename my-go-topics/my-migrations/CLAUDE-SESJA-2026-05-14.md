@@ -158,24 +158,10 @@ OutboxPublisher (commit: My go topics - DDD OutboxPublisher)
       db.ContextWithTxQueries(ctx, q) → context.Context
       db.TxQueriesFromCtx(ctx) → (*commanddb.Queries, bool)
 
-    internal/infrastructure/db/migrations/public/002_outbox.up.sql
-      CREATE TABLE outbox_events (id BIGSERIAL, event_name TEXT, payload JSONB,
-        created_at TIMESTAMP, published_at TIMESTAMP)
-
-    internal/infrastructure/db/queries/command/public/outbox.sql
-      InsertOutboxEvent, SelectUnpublishedOutboxEvents, MarkOutboxEventPublished
-
-    internal/infrastructure/db/sqlc/command/outbox.sql.go  — wygenerowane przez sqlc
-
     internal/infrastructure/event/outbox_publisher.go
       type OutboxPublisher struct{}
       Publish: jeśli brak txCtx → zwróć nil (np. w testach jednostkowych)
       W transakcji: json.Marshal(event) → q.InsertOutboxEvent
-
-    internal/infrastructure/worker/outbox_worker.go
-      type OutboxWorker struct { queries *commanddb.Queries; interval time.Duration }
-      Run(ctx): ticker co 5s → processOnce
-      processOnce: SelectUnpublishedOutboxEvents → log → MarkOutboxEventPublished
 
   Zmienione pliki:
     internal/domain/todo/unit_of_work.go — fn dostaje ctx
@@ -184,12 +170,6 @@ OutboxPublisher (commit: My go topics - DDD OutboxPublisher)
     internal/application/command/create_todo.go — fn dostaje ctx, publish wewnątrz
     internal/application/command/complete_todo.go — fn dostaje ctx, publish wewnątrz
     internal/application/command/delete_todo.go — fn dostaje ctx, publish wewnątrz
-    cmd/api/main.go — OutboxPublisher + OutboxWorker zamiast LogPublisher
-
-  Wiring w main.go:
-    eventPublisher := infraevent.NewOutboxPublisher()
-    outboxWorker := worker.NewOutboxWorker(commandQ, 5*time.Second)
-    go outboxWorker.Run(ctx)
 
   Ważna właściwość: publisher.Publish(txCtx, events) wywoływane WEWNĄTRZ fn
   (czyli wewnątrz transakcji). Jeśli brak *commanddb.Queries w ctx (np. fake UoW
@@ -198,10 +178,74 @@ OutboxPublisher (commit: My go topics - DDD OutboxPublisher)
 
 ---
 
-Stan na jutro
+outbox_events w schemacie tenanta + testy integracyjne
+(commit: My go topics - outbox_events w schemacie tenanta + testy integracyjne)
 
-Wszystko zacommitowane. 11 commitów (dziś) ahead of origin/main.
-DDD-CLAUDE.md zaktualizowany (sekcje 14, 16, 18, 19, 20).
+  Decyzja: outbox_events per-tenant (nie w public)
+
+  Pierwsza wersja OutboxPublisher pisała do public.outbox_events, INSERT wywoływany
+  wewnątrz transakcji tenanta (SET LOCAL search_path = "tenant_xxx"). Tabela public.outbox_events
+  była niedostępna — search_path zasłaniał ją schemątem tenanta.
+
+  Rozwiązanie: outbox_events w każdym schemacie tenanta.
+    - SET LOCAL search_path = "tenant_xxx" pokrywa outbox_events automatycznie
+    - brak potrzeby kwalifikowania zapytań przez public.
+    - Worker iteruje per-tenant: ListTenantSchemas → processTenant
+
+  Przeniesione pliki:
+    migrations/public/002_outbox.* → migrations/tenant/002_outbox.*
+    queries/command/public/outbox.sql → queries/command/tenant/outbox.sql
+    (zapytania bez prefiksu public. — search_path załatwia schemę)
+
+  OutboxWorker — przepisany na per-tenant:
+    type OutboxWorker struct { txManager *db.TxManager; publicQ *commanddb.Queries; interval }
+    ProcessOnce: publicQ.ListTenantSchemas(ctx) → for schema → processTenant(ctx, schema)
+    processTenant: txManager.WithinTransaction(ctx, schema, fn)
+      fn: SelectUnpublishedOutboxEvents → log → MarkOutboxEventPublished
+
+    Wcześniej worker operował na jednej tabeli public.outbox_events.
+    Teraz musi iterować wszystkich tenantów i procesować każdego osobno.
+
+  Wiring w main.go:
+    eventPublisher := infraevent.NewOutboxPublisher()
+    outboxWorker := worker.NewOutboxWorker(txManager, commandQ, 5*time.Second)
+    go outboxWorker.Run(ctx)
+
+  Testy integracyjne (tests/integration/outbox_test.go) — 5 testów:
+    TestOutboxPublisher_CreateTodo_WritesEventToOutbox
+      — truncate outbox, CreateTodo przez OutboxPublisher, assert 1 event "todo.created"
+        z polem TodoID i Title w payload
+    TestOutboxPublisher_CompleteTodo_WritesEventToOutbox
+      — create (LogPublisher), truncate, CompleteTodo (OutboxPublisher), assert "todo.completed"
+    TestOutboxPublisher_DeleteTodo_WritesEventToOutbox
+      — create, truncate, DeleteTodo (OutboxPublisher), assert "todo.deleted"
+    TestOutboxPublisher_LogPublisher_DoesNotWriteToOutbox
+      — truncate, create (LogPublisher), assert empty outbox
+    TestOutboxWorker_ProcessOnce_MarksEventsPublished
+      — truncate, create event, assert 1 unpublished, ProcessOnce, assert 0 unpublished,
+        assert published_at != nil
+
+  Pomocniki testowe operują na schemacie tenanta:
+    truncateOutbox: TRUNCATE "tenant_xxx".outbox_events RESTART IDENTITY
+    unpublishedEvents: WithinTransaction(TenantSchema) → SelectUnpublishedOutboxEvents
+    allOutboxEvents: SELECT ... FROM "tenant_xxx".outbox_events
+
+  Naprawione pre-existing bugs:
+    MigrateAllTenants — pomija schematy z public.tenants które nie istnieją w PostgreSQL
+      (fix: TestCreateTenantHandler_ConflictOnDuplicateSchema wstawia "duplicate_schema"
+       bez tworzenia schematu; MigrateAllTenants próbował go migrować i failował)
+    TestTenantTableWorks — używa SET LOCAL search_path w transakcji zamiast SET search_path
+      (fix: SET search_path bez LOCAL zatruwało pulę połączeń; kolejne testy dostawały
+       połączenie z search_path = "tenant_xxx" i nie mogły znaleźć public.tenants)
+    todo_repository_test.go, todo_command_handler_test.go — pgx.ErrNoRows → domain.ErrNotFound
+
+  Stan testów: 33/33 pass (integration) + wszystkie unit testy
+
+---
+
+Stan na koniec sesji
+
+Wszystko zacommitowane. 13 commitów ahead of origin/main.
 
 ---
 
