@@ -25,7 +25,8 @@ Stack: Go, PostgreSQL, sqlc, golang-migrate, oapi-codegen, testcontainers.
 16. [Domain Events](#16-domain-events)
 17. [ReadRepository — odczyty bez UoW](#17-readrepository)
 18. [Input Ports — domknięcie hexagonal architecture](#18-input-ports)
-19. [Kolejne kroki](#19-kolejne-kroki)
+19. [Outbox Publisher — gwarantowana dostawa eventów](#19-outbox-publisher)
+20. [Kolejne kroki](#20-kolejne-kroki)
 
 ---
 
@@ -1504,7 +1505,181 @@ infrastructure/usecase/
 
 ---
 
-## 19. Kolejne kroki
+## 19. Outbox Publisher
+
+### Problem — utrata eventów między COMMITem a Publish
+
+Aktualny `LogPublisher` publikuje eventy **po** commicie transakcji:
+
+```go
+err = h.uow.Execute(ctx, func(repo todo.Repository) error {
+    return repo.Create(ctx, *t)   // COMMIT
+})
+h.publisher.Publish(ctx, t.PullEvents())  // ← co jeśli tu padnie serwer?
+```
+
+Między COMMITem a `Publish` może paść serwer, utracić się połączenie, zrestartować kontener. Todo zostaje w bazie, ale `TodoCreated` znika na zawsze. To utrata eventu — naruszenie gwarancji dostawy.
+
+### Rozwiązanie — zapis w tej samej transakcji
+
+Zamiast publishować po commicie, zapisujesz eventy do tabeli `outbox` **w tej samej transakcji** co agregat:
+
+```
+BEGIN
+  INSERT INTO todos (id, title) ...
+  INSERT INTO outbox (event_type, payload, published_at) VALUES ('todo.created', '...', NULL)
+COMMIT  ← albo oba rekordy są, albo żaden
+```
+
+Osobny worker czyta outbox i publikuje dalej:
+
+```
+SELECT * FROM outbox WHERE published_at IS NULL ORDER BY created_at
+→ przetwórz event
+→ UPDATE outbox SET published_at = NOW()
+```
+
+Jeśli serwer padnie po COMMITcie — outbox ma niepublikowane eventy. Worker znajdzie je przy restarcie. Gwarancja **at-least-once delivery** (event może dotrzeć więcej niż raz — konsument powinien być idempotentny).
+
+### Czy potrzebujesz brokera wiadomości?
+
+Nie. Outbox Pattern to wzorzec niezależny od docelowego miejsca eventu:
+
+| Cel publikacji | Kiedy |
+|---|---|
+| Handler w tym samym procesie | Najprostszy przypadek — wystarczy Go + PostgreSQL |
+| Zewnętrzny broker (Kafka, NATS, RabbitMQ) | Gdy inne serwisy muszą reagować na eventy |
+| Webhook / HTTP call | Integracja zewnętrznych systemów |
+
+### Narzędzia (od prostych do złożonych)
+
+**Go + PostgreSQL (ten projekt)** — tabela `outbox`, goroutine co kilka sekund. Zero nowej infrastruktury. Wystarczy do nauki wzorca i produkcji małej skali.
+
+**River** (`riverqueue/river`) — biblioteka Go do job queue na PostgreSQL. Implementuje Outbox Pattern wewnętrznie, obsługuje retry, dead-letter queue, scheduling. Najlepszy wybór gdy chcesz "outbox gotowy z pudełka" na PostgreSQL.
+
+**NATS** — lekki broker w Go, bardzo prosty. Używany jako *cel* eventu z outboxa (worker → NATS → subskrybenci). Nie rozwiązuje samego outboxa.
+
+**RabbitMQ** — klasyczny broker AMQP. Bardziej rozbudowany niż NATS, lepszy dla złożonych topologii routingu. Zewnętrzna infrastruktura.
+
+**Kafka** — distributed log, nie queue. Eventy trwałe i odtwarzalne. Używany przy Event Sourcing, dużej skali, wielu konsumentach. Ciężka infrastruktura — overkill dla małego projektu.
+
+### Implementacja w tym projekcie
+
+```
+infrastructure/event/
+  log_publisher.go     ← poprzednia implementacja (tylko logi)
+  outbox_publisher.go  ← nowa: zapisuje do tabeli outbox w transakcji
+
+infrastructure/db/
+  migrations/public/
+    002_outbox.up.sql  ← CREATE TABLE outbox_events (...)
+  txctx.go            ← context key: ContextWithTxQueries / TxQueriesFromCtx
+
+infrastructure/worker/
+  outbox_worker.go    ← goroutine co 5s: czyta outbox → log → mark published
+```
+
+**Tabela outbox:**
+
+```sql
+CREATE TABLE outbox_events (
+    id           BIGSERIAL PRIMARY KEY,
+    event_name   TEXT NOT NULL,
+    payload      JSONB NOT NULL,
+    created_at   TIMESTAMP DEFAULT now(),
+    published_at TIMESTAMP
+);
+```
+
+### Kluczowa zmiana — UnitOfWork.Execute fn dostaje ctx
+
+`domain.EventPublisher` dostaje tylko `context.Context` — nie `*commanddb.Queries`. Żeby `OutboxPublisher` pisał do bazy w tej samej transakcji, queries muszą płynąć przez context.
+
+**Rozwiązanie:** zmiana sygnatury `fn` w `todo.UnitOfWork`:
+
+```go
+// przed:
+Execute(ctx context.Context, fn func(repo Repository) error) error
+
+// po:
+Execute(ctx context.Context, fn func(ctx context.Context, repo Repository) error) error
+```
+
+`TodoUnitOfWork.Execute` tworzy `txCtx` z osadzonymi queries i przekazuje go do `fn`:
+
+```go
+func (u *TodoUnitOfWork) Execute(ctx context.Context, fn func(context.Context, todo.Repository) error) error {
+    return u.txManager.WithinTransaction(ctx, u.tenantSchema, func(commandQ *commanddb.Queries) error {
+        txCtx := db.ContextWithTxQueries(ctx, commandQ)
+        repo := NewTodoRepository(commandQ, querydb.New(commandQ.DB()))
+        return fn(txCtx, repo)
+    })
+}
+```
+
+Command handlery wołają `publisher.Publish` **wewnątrz** `fn` (czyli w transakcji):
+
+```go
+func (h *CompleteTodoHandler) Handle(ctx context.Context, cmd CompleteTodoCommand) error {
+    return h.uow.Execute(ctx, func(txCtx context.Context, repo todo.Repository) error {
+        t, err := repo.GetByID(txCtx, cmd.ID)
+        if err != nil { return err }
+        if err := t.Complete(); err != nil { return err }
+        if err := repo.Update(txCtx, *t); err != nil { return err }
+        return h.publisher.Publish(txCtx, t.PullEvents())  // ← wewnątrz transakcji
+    })
+}
+```
+
+**OutboxPublisher** wyciąga queries z context i wstawia event:
+
+```go
+func (p *OutboxPublisher) Publish(ctx context.Context, events []domain.DomainEvent) error {
+    q, ok := db.TxQueriesFromCtx(ctx)
+    if !ok {
+        return nil  // brak transakcji (np. fake UoW w testach) → no-op
+    }
+    for _, e := range events {
+        payload, _ := json.Marshal(e)
+        q.InsertOutboxEvent(ctx, commanddb.InsertOutboxEventParams{
+            EventName: e.EventName(),
+            Payload:   payload,
+        })
+    }
+    return nil
+}
+```
+
+**OutboxWorker** — goroutine w main.go:
+
+```go
+func (w *OutboxWorker) processOnce(ctx context.Context) error {
+    events, _ := w.queries.SelectUnpublishedOutboxEvents(ctx)
+    for _, e := range events {
+        slog.InfoContext(ctx, "outbox: dispatching event", "id", e.ID, "event_name", e.EventName)
+        w.queries.MarkOutboxEventPublished(ctx, e.ID)
+    }
+    return nil
+}
+```
+
+**Wiring w main.go:**
+
+```go
+eventPublisher := infraevent.NewOutboxPublisher()
+outboxWorker := worker.NewOutboxWorker(commanddb.New(pool), 5*time.Second)
+go outboxWorker.Run(ctx)
+```
+
+### Gwarancje i właściwości
+
+- **Atomowość**: agregat + event w outbox commitują się razem lub w ogóle
+- **At-least-once**: jeśli worker padnie po mark-published, event nie jest ponownie wysyłany; jeśli przed — zostanie wysłany jeszcze raz (konsument powinien być idempotentny)
+- **Kompatybilność z testami**: `FakeTodoUoW` wywołuje `fn(context.Background(), repo)` — `OutboxPublisher` dostaje pusty context, `TxQueriesFromCtx` zwraca `false`, zwraca `nil` — żadnego efektu
+
+---
+
+## 20. Kolejne kroki
 
 ### Zrobione (sesje 2026-05-12, 2026-05-13, 2026-05-14)
 - [x] `ListTodos` query handler + ReadRepository

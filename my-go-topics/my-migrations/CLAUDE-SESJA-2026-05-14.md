@@ -3,7 +3,8 @@ Podsumowanie sesji
 Co zrobiliśmy
 
 Domknięcie hexagonal architecture przez Input Ports, poprawka 409 dla ErrAlreadyCompleted,
-domain events dla TodoCompleted i TodoDeleted, unit testy HTTP handlerów z fake portami.
+domain events dla TodoCompleted i TodoDeleted, unit testy HTTP handlerów z fake portami,
+OutboxPublisher z gwarantowaną dostawą eventów.
 
 ---
 
@@ -126,22 +127,86 @@ Unit testy HTTP handlerów z fake portami (commit: My go topics - DDD unit testy
 
 ---
 
+OutboxPublisher (commit: My go topics - DDD OutboxPublisher)
+
+  Problem: publisher.Publish wywoływany PO uow.Execute — crash między commitem
+  a publishem powoduje utratę eventu. LogPublisher tym nie przejmuje, ale OutboxPublisher musi
+  pisać do bazy w TEJ SAMEJ transakcji co agregat.
+
+  Kluczowa zmiana architekturalna — todo.UnitOfWork.Execute fn dostaje teraz ctx:
+
+    // przed:
+    Execute(ctx context.Context, fn func(repo Repository) error) error
+
+    // po:
+    Execute(ctx context.Context, fn func(ctx context.Context, repo Repository) error) error
+
+  Dlaczego: fn musi dostać txCtx (z *commanddb.Queries osadzonym w context),
+  żeby OutboxPublisher mógł wyciągnąć zapytania i wstawić do outbox_events.
+
+  Przepływ:
+    1. TodoUnitOfWork.Execute wywołuje txManager.WithinTransaction
+    2. Wewnątrz otrzymuje commandQ dla aktywnej transakcji
+    3. txCtx = db.ContextWithTxQueries(ctx, commandQ)
+    4. fn(txCtx, repo) — fn jest closurem handlera
+    5. Handler: repo.Update(txCtx, *t) + publisher.Publish(txCtx, t.PullEvents())
+    6. OutboxPublisher.Publish: q, ok := db.TxQueriesFromCtx(ctx) → INSERT INTO outbox_events
+    7. Transakcja commituje — agregat i event w outbox atomicznie
+
+  Nowe pliki:
+    internal/infrastructure/db/txctx.go
+      db.ContextWithTxQueries(ctx, q) → context.Context
+      db.TxQueriesFromCtx(ctx) → (*commanddb.Queries, bool)
+
+    internal/infrastructure/db/migrations/public/002_outbox.up.sql
+      CREATE TABLE outbox_events (id BIGSERIAL, event_name TEXT, payload JSONB,
+        created_at TIMESTAMP, published_at TIMESTAMP)
+
+    internal/infrastructure/db/queries/command/public/outbox.sql
+      InsertOutboxEvent, SelectUnpublishedOutboxEvents, MarkOutboxEventPublished
+
+    internal/infrastructure/db/sqlc/command/outbox.sql.go  — wygenerowane przez sqlc
+
+    internal/infrastructure/event/outbox_publisher.go
+      type OutboxPublisher struct{}
+      Publish: jeśli brak txCtx → zwróć nil (np. w testach jednostkowych)
+      W transakcji: json.Marshal(event) → q.InsertOutboxEvent
+
+    internal/infrastructure/worker/outbox_worker.go
+      type OutboxWorker struct { queries *commanddb.Queries; interval time.Duration }
+      Run(ctx): ticker co 5s → processOnce
+      processOnce: SelectUnpublishedOutboxEvents → log → MarkOutboxEventPublished
+
+  Zmienione pliki:
+    internal/domain/todo/unit_of_work.go — fn dostaje ctx
+    internal/infrastructure/repository/tenant/unit_of_work.go — przekazuje txCtx do fn
+    internal/testhelpers/fake_repo.go — FakeTodoUoW.Execute dostosowane
+    internal/application/command/create_todo.go — fn dostaje ctx, publish wewnątrz
+    internal/application/command/complete_todo.go — fn dostaje ctx, publish wewnątrz
+    internal/application/command/delete_todo.go — fn dostaje ctx, publish wewnątrz
+    cmd/api/main.go — OutboxPublisher + OutboxWorker zamiast LogPublisher
+
+  Wiring w main.go:
+    eventPublisher := infraevent.NewOutboxPublisher()
+    outboxWorker := worker.NewOutboxWorker(commandQ, 5*time.Second)
+    go outboxWorker.Run(ctx)
+
+  Ważna właściwość: publisher.Publish(txCtx, events) wywoływane WEWNĄTRZ fn
+  (czyli wewnątrz transakcji). Jeśli brak *commanddb.Queries w ctx (np. fake UoW
+  w testach jednostkowych), OutboxPublisher zwraca nil — żadnego efektu.
+  Eventy trafiają do outbox tylko gdy jest prawdziwa transakcja.
+
+---
+
 Stan na jutro
 
-Wszystko zacommitowane. 7 nowych commitów (dziś) ahead of origin/main.
-DDD-CLAUDE.md zaktualizowany (sekcje 14, 16, 18, 19).
+Wszystko zacommitowane. 8 nowych commitów (dziś) ahead of origin/main.
+DDD-CLAUDE.md zaktualizowany (sekcje 14, 16, 18, 19, 20).
 
 ---
 
 Kolejne kroki
 
-1. OutboxPublisher — NISKI priorytet
-
-   Gwarantowana dostawa eventów: publisher zapisuje do tabeli outbox
-   w tej samej transakcji co agregat.
-   Wymaga: nowej migracji (tabela outbox), implementacji OutboxPublisher
-   w infrastructure/event/, osobnego procesu czytającego outbox i publikującego dalej.
-
-2. Middleware autoryzacji — NISKI priorytet na tym etapie
+1. Middleware autoryzacji — NISKI priorytet na tym etapie
 
    JWT, wyciąganie tenant ID z tokena zamiast z nagłówka X-Tenant-ID.
