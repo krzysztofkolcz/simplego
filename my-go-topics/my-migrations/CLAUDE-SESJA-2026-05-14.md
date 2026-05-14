@@ -3,7 +3,7 @@ Podsumowanie sesji
 Co zrobiliśmy
 
 Domknięcie hexagonal architecture przez Input Ports, poprawka 409 dla ErrAlreadyCompleted,
-domain events dla TodoCompleted i TodoDeleted.
+domain events dla TodoCompleted i TodoDeleted, unit testy HTTP handlerów z fake portami.
 
 ---
 
@@ -93,11 +93,43 @@ Domain Events TodoCompleted i TodoDeleted (commit: My go topics - DDD domain eve
 
 ---
 
+Unit testy HTTP handlerów z fake portami (commit: My go topics - DDD unit testy HTTP handlerów)
+
+  25 testów, 19ms, zero połączeń z bazą danych.
+
+  Struktura — 4 pliki w internal/http/handler/ (package handler):
+    fakes_test.go          — 9 fake struct implementujących port interfaces
+    todo_handler_test.go   — 14 testów (CreateTodo ×3, GetTodo ×3, CompleteTodo ×4,
+                             DeleteTodo ×2, ListTodos ×2)
+    tenant_handler_test.go — 5 testów (CreateTenant ×3, GetTenant ×2)
+    user_handler_test.go   — 5 testów (CreateUser ×3, GetUser ×2)
+
+  Wzorzec fake portu — prosta struct z konfigurowalnymi polami:
+    type fakeCreateTodo struct { id uuid.UUID; err error }
+    func (f *fakeCreateTodo) Handle(_ context.Context, _ appcommand.CreateTodoCommand) (uuid.UUID, error) {
+        return f.id, f.err
+    }
+
+  Wzorzec testu — fake wstrzyknięty bezpośrednio w pole Server:
+    ts := todoSrv(&Server{completeTodo: &fakeCompleteTodo{err: domain.ErrAlreadyCompleted}})
+    // → assert 409
+
+  &Server{completeTodo: fake} działa, bo testy są w package handler
+  (dostęp do nieeksportowanych pól). Pozostałe pola nil — nie są wywoływane.
+
+  Pokrycie: złota ścieżka (200/201/204) + każde mapowanie błędu domenowego:
+    ErrInvalidTitle → 400, ErrInvalidEmail → 400
+    ErrNotFound → 404
+    ErrAlreadyCompleted → 409, ErrConflict → 409
+    errors.New("db down") → 500
+  Dla 200/201: asercja na pola JSON (id, title, schema_name, email).
+
+---
+
 Stan na jutro
 
-Wszystko zacommitowane. 5 nowych commitów (dziś) ahead of origin/main.
-DDD-CLAUDE.md zaktualizowany o Input Ports (sekcja 18), sekcję 16 (Domain Events),
-sekcję 14 (Aggregate) i sekcję 19 (Kolejne kroki).
+Wszystko zacommitowane. 7 nowych commitów (dziś) ahead of origin/main.
+DDD-CLAUDE.md zaktualizowany (sekcje 14, 16, 18, 19).
 
 ---
 
@@ -110,12 +142,6 @@ Kolejne kroki
    Wymaga: nowej migracji (tabela outbox), implementacji OutboxPublisher
    w infrastructure/event/, osobnego procesu czytającego outbox i publikującego dalej.
 
-2. Unit testy HTTP handlerów — ŚREDNI priorytet
-
-   Teraz możliwe bez bazy: Server dostaje fake port interface.
-   Testować: mapowanie błędów domenowych na kody HTTP (400, 404, 409, 500).
-   Plik: internal/http/handler/todo_handler_test.go
-
-3. Middleware autoryzacji — NISKI priorytet na tym etapie
+2. Middleware autoryzacji — NISKI priorytet na tym etapie
 
    JWT, wyciąganie tenant ID z tokena zamiast z nagłówka X-Tenant-ID.
