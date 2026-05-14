@@ -1054,7 +1054,12 @@ func (t *Todo) Complete() error {
         return domain.ErrAlreadyCompleted   // nie możesz ukończyć już ukończonego
     }
     t.Completed = true
+    t.record(TodoCompleted{TodoID: t.ID, OccurredAt: time.Now()})   // nagrywa event
     return nil
+}
+
+func (t *Todo) Delete() {
+    t.record(TodoDeleted{TodoID: t.ID, OccurredAt: time.Now()})   // brak inwariantów → brak błędu
 }
 ```
 
@@ -1133,7 +1138,7 @@ type EventPublisher interface {
 }
 ```
 
-### Event w agregacie
+### Eventy w agregacie
 
 ```go
 // internal/domain/todo/events.go
@@ -1143,15 +1148,40 @@ type TodoCreated struct {
     OccurredAt time.Time
 }
 func (e TodoCreated) EventName() string { return "todo.created" }
+
+type TodoCompleted struct {
+    TodoID     uuid.UUID
+    OccurredAt time.Time
+}
+func (e TodoCompleted) EventName() string { return "todo.completed" }
+
+type TodoDeleted struct {
+    TodoID     uuid.UUID
+    OccurredAt time.Time
+}
+func (e TodoDeleted) EventName() string { return "todo.deleted" }
 ```
 
-Agregat nagrywa event w konstruktorze:
+Każda mutacja na agregacie nagrywa odpowiedni event:
 
 ```go
-func NewTodo(...) (*Todo, error) {
+// entity.go
+
+func NewTodo(id uuid.UUID, title string) (*Todo, error) {
     ...
     t.record(TodoCreated{TodoID: id, Title: t.Title, OccurredAt: time.Now()})
     return t, nil
+}
+
+func (t *Todo) Complete() error {
+    if t.Completed { return domain.ErrAlreadyCompleted }
+    t.Completed = true
+    t.record(TodoCompleted{TodoID: t.ID, OccurredAt: time.Now()})
+    return nil
+}
+
+func (t *Todo) Delete() {
+    t.record(TodoDeleted{TodoID: t.ID, OccurredAt: time.Now()})
 }
 
 func (t *Todo) PullEvents() []domain.DomainEvent {
@@ -1161,15 +1191,45 @@ func (t *Todo) PullEvents() []domain.DomainEvent {
 }
 ```
 
+`Delete()` nie zwraca błędu — nie ma inwariantów do sprawdzenia (todo zawsze można usunąć). `Complete()` zwraca błąd, bo sprawdza inwariant (`ErrAlreadyCompleted`).
+
 ### Publikacja po commicie
 
+Wzorzec jest identyczny dla wszystkich trzech handlerów: wykonaj transakcję, a po jej commicie opublikuj eventy z agregatu.
+
 ```go
-// create_todo.go
+// create_todo.go — t tworzone przed uow.Execute
+t, err := todo.NewTodo(uuid.New(), cmd.Title)
 err = h.uow.Execute(ctx, func(repo todo.Repository) error { return repo.Create(ctx, *t) })
 if err != nil { return uuid.Nil, err }
-// COMMIT już nastąpił — teraz publikujemy
-_ = h.publisher.Publish(ctx, t.PullEvents())
+return t.ID, h.publisher.Publish(ctx, t.PullEvents())
+
+// complete_todo.go — t ładowane wewnątrz closure, ale zadeklarowane na zewnątrz
+var t *todo.Todo
+err := h.uow.Execute(ctx, func(repo todo.Repository) error {
+    var err error
+    t, err = repo.GetByID(ctx, cmd.ID)
+    if err != nil { return err }
+    if err := t.Complete(); err != nil { return err }
+    return repo.Update(ctx, *t)
+})
+if err != nil { return err }
+return h.publisher.Publish(ctx, t.PullEvents())
+
+// delete_todo.go — analogicznie: load → Delete() → repo.Delete()
+var t *todo.Todo
+err := h.uow.Execute(ctx, func(repo todo.Repository) error {
+    var err error
+    t, err = repo.GetByID(ctx, cmd.ID)
+    if err != nil { return err }
+    t.Delete()
+    return repo.Delete(ctx, cmd.ID)
+})
+if err != nil { return err }
+return h.publisher.Publish(ctx, t.PullEvents())
 ```
+
+**Dlaczego `DeleteTodoHandler` ładuje agregat?** Żeby agregat mógł nagrać `TodoDeleted`. Bez `GetByID` nie ma obiektu `t`, a eventy żyją na agregacie. Dodatkowa korzyść: handler zwraca `ErrNotFound` na poziomie domeny, nie bazy danych.
 
 **Ważne:** w produkcji `OutboxPublisher` powinien zapisać eventy do tabeli `outbox` **w tej samej transakcji** co agregat (gwarantowana dostawa). `LogPublisher` (aktualna implementacja) tylko loguje — bez gwarancji.
 
@@ -1391,10 +1451,10 @@ infrastructure/usecase/
 - [x] Value Object `Email`
 - [x] Domain Events (`TodoCreated`, `LogPublisher`, `FakeEventPublisher`)
 - [x] Input Ports — `application/port/` + `infrastructure/usecase/` — domknięcie hexagonal architecture
+- [x] `ErrAlreadyCompleted` → 409 w OpenAPI spec i handlerze
+- [x] Domain Events `TodoCompleted` i `TodoDeleted` — `Complete()` i `Delete()` nagrywają eventy, handlery publikują po commicie
 
 ### Do zrobienia
-- [ ] `CompleteTodo` brak 409 w OpenAPI spec — `ErrAlreadyCompleted` wraca jako 500
-- [ ] Domain events dla innych agregatów: `TodoCompleted`, `TodoDeleted`
 - [ ] `OutboxPublisher` — zapis eventów do tabeli DB w tej samej transakcji (gwarantowana dostawa)
 - [ ] Unit testy HTTP handlerów z fake portami (teraz możliwe bez bazy)
 - [ ] Middleware autoryzacji — JWT, wyciąganie tenant ID z tokena zamiast z nagłówka
