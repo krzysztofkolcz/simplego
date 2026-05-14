@@ -35,7 +35,12 @@ func (t *Todo) Complete() error {
 		return domain.ErrAlreadyCompleted
 	}
 	t.Completed = true
+	t.record(TodoCompleted{TodoID: t.ID, OccurredAt: time.Now()})
 	return nil
+}
+
+func (t *Todo) Delete() {
+	t.record(TodoDeleted{TodoID: t.ID, OccurredAt: time.Now()})
 }
 
 // PullEvents returns recorded events and clears the internal list.

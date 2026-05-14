@@ -64,8 +64,8 @@ func main() {
 
 	srv := handler.NewServer(
 		usecase.NewCreateTodoUseCase(txManager, eventPublisher),
-		usecase.NewCompleteTodoUseCase(txManager),
-		usecase.NewDeleteTodoUseCase(txManager),
+		usecase.NewCompleteTodoUseCase(txManager, eventPublisher),
+		usecase.NewDeleteTodoUseCase(txManager, eventPublisher),
 		usecase.NewGetTodoUseCase(txManager),
 		usecase.NewListTodosUseCase(txManager),
 		usecase.NewCreateTenantUseCase(txManager),

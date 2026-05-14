@@ -18,12 +18,15 @@ func TestCompleteTodoHandler_Handle_CompletesTodo(t *testing.T) {
 	repo := &testhelpers.FakeTodoRepo{
 		Created: []todo.Todo{{ID: id, Title: "buy milk"}},
 	}
-	handler := NewCompleteTodoHandler(&testhelpers.FakeTodoUoW{Repo: repo})
+	pub := &testhelpers.FakeEventPublisher{}
+	handler := NewCompleteTodoHandler(&testhelpers.FakeTodoUoW{Repo: repo}, pub)
 
 	err := handler.Handle(context.Background(), CompleteTodoCommand{ID: id})
 
 	require.NoError(t, err)
 	require.True(t, repo.Created[0].Completed)
+	require.Len(t, pub.Published, 1)
+	require.Equal(t, "todo.completed", pub.Published[0].EventName())
 }
 
 func TestCompleteTodoHandler_Handle_AlreadyCompleted(t *testing.T) {
@@ -31,7 +34,7 @@ func TestCompleteTodoHandler_Handle_AlreadyCompleted(t *testing.T) {
 	repo := &testhelpers.FakeTodoRepo{
 		Created: []todo.Todo{{ID: id, Title: "buy milk", Completed: true}},
 	}
-	handler := NewCompleteTodoHandler(&testhelpers.FakeTodoUoW{Repo: repo})
+	handler := NewCompleteTodoHandler(&testhelpers.FakeTodoUoW{Repo: repo}, &testhelpers.FakeEventPublisher{})
 
 	err := handler.Handle(context.Background(), CompleteTodoCommand{ID: id})
 
@@ -40,7 +43,7 @@ func TestCompleteTodoHandler_Handle_AlreadyCompleted(t *testing.T) {
 
 func TestCompleteTodoHandler_Handle_NotFound(t *testing.T) {
 	repo := &testhelpers.FakeTodoRepo{}
-	handler := NewCompleteTodoHandler(&testhelpers.FakeTodoUoW{Repo: repo})
+	handler := NewCompleteTodoHandler(&testhelpers.FakeTodoUoW{Repo: repo}, &testhelpers.FakeEventPublisher{})
 
 	err := handler.Handle(context.Background(), CompleteTodoCommand{ID: uuid.New()})
 
@@ -49,7 +52,7 @@ func TestCompleteTodoHandler_Handle_NotFound(t *testing.T) {
 
 func TestCompleteTodoHandler_Handle_RepoError(t *testing.T) {
 	repo := &testhelpers.FakeTodoRepo{Err: errors.New("db down")}
-	handler := NewCompleteTodoHandler(&testhelpers.FakeTodoUoW{Repo: repo})
+	handler := NewCompleteTodoHandler(&testhelpers.FakeTodoUoW{Repo: repo}, &testhelpers.FakeEventPublisher{})
 
 	err := handler.Handle(context.Background(), CompleteTodoCommand{ID: uuid.New()})
 

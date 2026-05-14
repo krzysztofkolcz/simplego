@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/krzysztofkolcz/mymigrations/internal/domain"
 	"github.com/krzysztofkolcz/mymigrations/internal/domain/todo"
 )
 
@@ -14,11 +15,12 @@ type DeleteTodoCommand struct {
 }
 
 type DeleteTodoHandler struct {
-	uow todo.UnitOfWork
+	uow       todo.UnitOfWork
+	publisher domain.EventPublisher
 }
 
-func NewDeleteTodoHandler(uow todo.UnitOfWork) *DeleteTodoHandler {
-	return &DeleteTodoHandler{uow: uow}
+func NewDeleteTodoHandler(uow todo.UnitOfWork, publisher domain.EventPublisher) *DeleteTodoHandler {
+	return &DeleteTodoHandler{uow: uow, publisher: publisher}
 }
 
 func (h *DeleteTodoHandler) Handle(
@@ -26,7 +28,19 @@ func (h *DeleteTodoHandler) Handle(
 	cmd DeleteTodoCommand,
 ) error {
 
-	return h.uow.Execute(ctx, func(repo todo.Repository) error {
+	var t *todo.Todo
+	err := h.uow.Execute(ctx, func(repo todo.Repository) error {
+		var err error
+		t, err = repo.GetByID(ctx, cmd.ID)
+		if err != nil {
+			return err
+		}
+		t.Delete()
 		return repo.Delete(ctx, cmd.ID)
 	})
+	if err != nil {
+		return err
+	}
+
+	return h.publisher.Publish(ctx, t.PullEvents())
 }

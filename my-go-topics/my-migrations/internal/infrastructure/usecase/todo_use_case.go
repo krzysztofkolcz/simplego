@@ -28,29 +28,31 @@ func (u *createTodoUseCase) Handle(ctx context.Context, cmd appcommand.CreateTod
 }
 
 type completeTodoUseCase struct {
-	txManager *db.TxManager
+	txManager      *db.TxManager
+	eventPublisher domain.EventPublisher
 }
 
-func NewCompleteTodoUseCase(txManager *db.TxManager) port.CompleteTodoPort {
-	return &completeTodoUseCase{txManager: txManager}
+func NewCompleteTodoUseCase(txManager *db.TxManager, publisher domain.EventPublisher) port.CompleteTodoPort {
+	return &completeTodoUseCase{txManager: txManager, eventPublisher: publisher}
 }
 
 func (u *completeTodoUseCase) Handle(ctx context.Context, cmd appcommand.CompleteTodoCommand) error {
 	uow := tenantrepo.NewTodoUnitOfWork(u.txManager, cmd.TenantSchema)
-	return appcommand.NewCompleteTodoHandler(uow).Handle(ctx, cmd)
+	return appcommand.NewCompleteTodoHandler(uow, u.eventPublisher).Handle(ctx, cmd)
 }
 
 type deleteTodoUseCase struct {
-	txManager *db.TxManager
+	txManager      *db.TxManager
+	eventPublisher domain.EventPublisher
 }
 
-func NewDeleteTodoUseCase(txManager *db.TxManager) port.DeleteTodoPort {
-	return &deleteTodoUseCase{txManager: txManager}
+func NewDeleteTodoUseCase(txManager *db.TxManager, publisher domain.EventPublisher) port.DeleteTodoPort {
+	return &deleteTodoUseCase{txManager: txManager, eventPublisher: publisher}
 }
 
 func (u *deleteTodoUseCase) Handle(ctx context.Context, cmd appcommand.DeleteTodoCommand) error {
 	uow := tenantrepo.NewTodoUnitOfWork(u.txManager, cmd.TenantSchema)
-	return appcommand.NewDeleteTodoHandler(uow).Handle(ctx, cmd)
+	return appcommand.NewDeleteTodoHandler(uow, u.eventPublisher).Handle(ctx, cmd)
 }
 
 type getTodoUseCase struct {

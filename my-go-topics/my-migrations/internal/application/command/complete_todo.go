@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/krzysztofkolcz/mymigrations/internal/domain"
 	"github.com/krzysztofkolcz/mymigrations/internal/domain/todo"
 )
 
@@ -14,11 +15,12 @@ type CompleteTodoCommand struct {
 }
 
 type CompleteTodoHandler struct {
-	uow todo.UnitOfWork
+	uow       todo.UnitOfWork
+	publisher domain.EventPublisher
 }
 
-func NewCompleteTodoHandler(uow todo.UnitOfWork) *CompleteTodoHandler {
-	return &CompleteTodoHandler{uow: uow}
+func NewCompleteTodoHandler(uow todo.UnitOfWork, publisher domain.EventPublisher) *CompleteTodoHandler {
+	return &CompleteTodoHandler{uow: uow, publisher: publisher}
 }
 
 func (h *CompleteTodoHandler) Handle(
@@ -26,8 +28,10 @@ func (h *CompleteTodoHandler) Handle(
 	cmd CompleteTodoCommand,
 ) error {
 
-	return h.uow.Execute(ctx, func(repo todo.Repository) error {
-		t, err := repo.GetByID(ctx, cmd.ID)
+	var t *todo.Todo
+	err := h.uow.Execute(ctx, func(repo todo.Repository) error {
+		var err error
+		t, err = repo.GetByID(ctx, cmd.ID)
 		if err != nil {
 			return err
 		}
@@ -36,4 +40,9 @@ func (h *CompleteTodoHandler) Handle(
 		}
 		return repo.Update(ctx, *t)
 	})
+	if err != nil {
+		return err
+	}
+
+	return h.publisher.Publish(ctx, t.PullEvents())
 }
