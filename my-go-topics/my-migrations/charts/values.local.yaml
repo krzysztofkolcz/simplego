@@ -1,0 +1,11 @@
+image:
+  repository: go-hello-registry:5000/kkolcz/go-migrations
+  pullPolicy: IfNotPresent
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi

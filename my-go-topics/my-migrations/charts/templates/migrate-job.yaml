@@ -35,7 +35,7 @@ spec:
       containers:
         - name: migrate
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           command: ["/app", "migrate"]
           env:
 {{ toYaml .Values.app.env | indent 12 }}

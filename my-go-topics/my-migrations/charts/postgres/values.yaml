@@ -1,9 +1,15 @@
 # removing this section, and moving passwords to ./go-hello/templates/sealedsecret-postgres.yaml
-# auth:
-#   username: 
-#   password: 
-#   database: 
-#   postgresPassword: 
+
+# Only for Bitnami!!! Error pulling image
+# image:
+#   tag: "17"
+
+# Only for Bitnami!!!
+auth:
+  username: appuser
+  password: strongpassword
+  database: appdb
+  postgresPassword: superadminpassword
 
 primary:
   persistence:
