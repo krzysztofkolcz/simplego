@@ -24,8 +24,12 @@ my-migrations/
 │       │   │   ├── command/ # zapytania SQLC do zapisu (public/ i tenant/)
 │       │   │   └── query/   # zapytania SQLC do odczytu (public/ i tenant/)
 │       │   ├── sqlc/
-│       │   │   ├── command/ # wygenerowany kod SQLC — package commanddb
-│       │   │   └── query/   # wygenerowany kod SQLC — package querydb
+│       │   │   ├── command/
+│       │   │   │   ├── public/  # wygenerowany kod SQLC — package commanddb (schemat public)
+│       │   │   │   └── tenant/  # wygenerowany kod SQLC — package commanddb (schemat tenant)
+│       │   │   └── query/
+│       │   │       ├── public/  # wygenerowany kod SQLC — package querydb (schemat public)
+│       │   │       └── tenant/  # wygenerowany kod SQLC — package querydb (schemat tenant)
 │       │   ├── migrate.go   # logika migracji, walidacja, retry
 │       │   ├── pool.go      # konfiguracja pgxpool
 │       │   ├── tx.go        # TxManager — transakcje z routingiem schematu
@@ -91,32 +95,65 @@ my-migrations/
 
 ## TxManager — wzorzec transakcji
 
-Cztery metody pokrywające wszystkie kombinacje:
+Cztery metody pokrywające wszystkie kombinacje schematu i trybu dostępu:
 
 ```go
-// Zapis w schemacie tenanta
-txManager.WithinTransaction(ctx, tenantSchema, func(q *commanddb.Queries) error { ... })
+// Zapis w schemacie tenanta — callback otrzymuje *commanddbtenant.Queries
+txManager.WithinTransaction(ctx, tenantSchema, func(q *commanddbtenant.Queries) error { ... })
 
-// Zapis w schemacie publicznym
-txManager.WithinPublicTransaction(ctx, func(q *commanddb.Queries) error { ... })
+// Zapis w schemacie publicznym — callback otrzymuje *commanddbpub.Queries
+txManager.WithinPublicTransaction(ctx, func(q *commanddbpub.Queries) error { ... })
 
-// Odczyt w schemacie tenanta (read-only tx)
-txManager.WithinTransactionReadonly(ctx, tenantSchema, func(q *querydb.Queries) error { ... })
+// Odczyt w schemacie tenanta (read-only tx) — callback otrzymuje *querydbtenant.Queries
+txManager.WithinTransactionReadonly(ctx, tenantSchema, func(q *querydbtenant.Queries) error { ... })
 
-// Odczyt w schemacie publicznym (read-only tx)
-txManager.WithinPublicTransactionReadonly(ctx, func(q *querydb.Queries) error { ... })
+// Odczyt w schemacie publicznym (read-only tx) — callback otrzymuje *querydbpub.Queries
+txManager.WithinPublicTransactionReadonly(ctx, func(q *querydbpub.Queries) error { ... })
 ```
 
-`commanddb` i `querydb` to dwa osobne pakiety SQLC — command do zapisu, query do odczytu.
+Typy są ścisłe — nie można pomylić schematu public z tenantem w czasie kompilacji.
 
 ## SQLC — dostęp do bazy danych
 
-- Nie pisać ręcznie SQL w kodzie Go — tylko przez SQLC
-- Zapytania w `internal/infrastructure/db/queries/command/` i `.../query/`
-- Podzielone na `public/` (schemat publiczny) i `tenant/` (schemat tenanta)
+### Cztery generatory (sqlc.yaml)
+
+`sqlc.yaml` definiuje **4 osobne generatory** — każdy widzi tylko migracje swojego schematu. Dzięki temu ta sama nazwa tabeli może istnieć w `public` i `tenant` bez błędu `relation already exists`.
+
+| Generator | Schemat migracji | Zapytania | Pakiet Go | Ścieżka wyjściowa |
+|---|---|---|---|---|
+| commanddb public | `migrations/public` | `queries/command/public` | `commanddb` | `sqlc/command/public` |
+| commanddb tenant | `migrations/tenant` | `queries/command/tenant` | `commanddb` | `sqlc/command/tenant` |
+| querydb public | `migrations/public` | `queries/query/public` | `querydb` | `sqlc/query/public` |
+| querydb tenant | `migrations/tenant` | `queries/query/tenant` | `querydb` | `sqlc/query/tenant` |
+
+### Importy w kodzie Go
+
+Pliki w `repository/public/` importują:
+```go
+commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command/public"
+querydb   "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query/public"
+```
+
+Pliki w `repository/tenant/` importują:
+```go
+commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command/tenant"
+querydb   "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query/tenant"
+```
+
+Pliki używające obu schematów (`db/tx.go`, `worker/outbox_worker.go`) używają aliasów:
+```go
+commanddbpub    "github.com/.../sqlc/command/public"
+commanddbtenant "github.com/.../sqlc/command/tenant"
+querydbpub      "github.com/.../sqlc/query/public"
+querydbtenant   "github.com/.../sqlc/query/tenant"
+```
+
+### Zasady
+- Nie pisać SQL bezpośrednio w kodzie Go — tylko przez SQLC
+- Zapytania trzymać w `queries/command/` (zapis) i `queries/query/` (odczyt), podzielone na `public/` i `tenant/`
 - Po zmianie zapytań lub migracji: `make sqlc-generate`
 - UUID mapowany do `github.com/google/uuid.UUID` (override w sqlc.yaml)
-- Generuje: `models.go`, `querier.go`, `*_sql.go`, `db.go`
+- Każdy pakiet zawiera `accessor.go` z metodą `DB() DBTX` — pozwala unit of work tworzyć `querydb` z tej samej transakcji co `commanddb`. Plik ten **nie jest generowany przez SQLC** — nie usuwać przy regeneracji.
 
 ## Migracje — konwencje
 
@@ -167,7 +204,7 @@ Kolejność:
 1. Logger (`slogctx` + `slog.NewJSONHandler`)
 2. Signal context (`signal.NotifyContext` z SIGTERM, SIGINT)
 3. Pool bazy danych (`db.NewPool`)
-4. `TxManager`, `commanddb.New`, `querydb.New`, `OutboxPublisher`
+4. `TxManager`, `commanddbpub.New(pool)` (public queries), `querydbpub.New(pool)` (public reads), `OutboxPublisher`
 5. `OutboxWorker` — `go worker.Run(ctx)`
 6. Use-case'y z `usecase.NewXxx(...)`
 7. `handler.NewServer(...)`, `router.New(...)`
@@ -228,3 +265,5 @@ Jeden binary obsługuje oba tryby — przełączane przez argument CLI.
 - Nie importować `infrastructure` z `domain`
 - Nie mockować bazy danych w testach integracyjnych
 - Nie zmieniać nazw zaaplikowanych plików migracji (zmiana numeru wersji = błąd przy down migration)
+- Nie łączyć migracji `public` i `tenant` w jeden generator SQLC — powoduje błąd duplikatu tabeli gdy ta sama nazwa istnieje w obu schematach
+- Nie usuwać `accessor.go` z pakietów `sqlc/command/*/` — nie jest generowany przez SQLC, a jest wymagany przez unit of work do współdzielenia transakcji między `commanddb` a `querydb`
