@@ -12,7 +12,8 @@ import (
 
 	"github.com/krzysztofkolcz/mymigrations/internal/application/command"
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
-	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command"
+	commanddbpub "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command/public"
+	commanddbtenant "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command/tenant"
 	infraevent "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/event"
 	tenantrepo "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/repository/tenant"
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/worker"
@@ -28,11 +29,11 @@ func truncateOutbox(ctx context.Context, t *testing.T) {
 }
 
 // unpublishedEvents zwraca niepublikowane eventy z tabeli outbox_events tenanta.
-func unpublishedEvents(ctx context.Context, t *testing.T) []commanddb.SelectUnpublishedOutboxEventsRow {
+func unpublishedEvents(ctx context.Context, t *testing.T) []commanddbtenant.SelectUnpublishedOutboxEventsRow {
 	t.Helper()
-	var events []commanddb.SelectUnpublishedOutboxEventsRow
+	var events []commanddbtenant.SelectUnpublishedOutboxEventsRow
 	txManager := db.NewTxManager(ConnectionPool)
-	err := txManager.WithinTransaction(ctx, TenantSchema, func(q *commanddb.Queries) error {
+	err := txManager.WithinTransaction(ctx, TenantSchema, func(q *commanddbtenant.Queries) error {
 		var err error
 		events, err = q.SelectUnpublishedOutboxEvents(ctx)
 		return err
@@ -174,7 +175,7 @@ func TestOutboxWorker_ProcessOnce_MarksEventsPublished(t *testing.T) {
 
 	// Uruchom worker
 	txManager := db.NewTxManager(ConnectionPool)
-	publicQ := commanddb.New(ConnectionPool)
+	publicQ := commanddbpub.New(ConnectionPool)
 	w := worker.NewOutboxWorker(txManager, publicQ, time.Second)
 	require.NoError(t, w.ProcessOnce(ctx))
 

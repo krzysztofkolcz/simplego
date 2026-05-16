@@ -2,20 +2,12 @@
 // versions:
 //   sqlc v1.29.0
 
-package commanddb
+package querydb
 
 import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
-
-type OutboxEvent struct {
-	ID          int64            `json:"id"`
-	EventName   string           `json:"event_name"`
-	Payload     []byte           `json:"payload"`
-	CreatedAt   pgtype.Timestamp `json:"created_at"`
-	PublishedAt pgtype.Timestamp `json:"published_at"`
-}
 
 type Tenant struct {
 	ID                 uuid.UUID        `json:"id"`
@@ -24,13 +16,6 @@ type Tenant struct {
 	MigrationStatus    pgtype.Text      `json:"migration_status"`
 	MigrationError     pgtype.Text      `json:"migration_error"`
 	MigrationUpdatedAt pgtype.Timestamp `json:"migration_updated_at"`
-}
-
-type Todo struct {
-	ID        uuid.UUID        `json:"id"`
-	Title     string           `json:"title"`
-	Completed bool             `json:"completed"`
-	CreatedAt pgtype.Timestamp `json:"created_at"`
 }
 
 type User struct {

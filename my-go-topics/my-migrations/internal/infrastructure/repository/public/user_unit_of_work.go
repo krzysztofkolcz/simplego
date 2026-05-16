@@ -5,8 +5,8 @@ import (
 
 	"github.com/krzysztofkolcz/mymigrations/internal/domain/user"
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
-	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command"
-	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query"
+	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command/public"
+	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query/public"
 )
 
 type UserUnitOfWork struct {

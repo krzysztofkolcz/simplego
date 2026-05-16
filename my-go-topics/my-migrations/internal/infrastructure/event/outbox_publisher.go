@@ -6,7 +6,7 @@ import (
 
 	"github.com/krzysztofkolcz/mymigrations/internal/domain"
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
-	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command"
+	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command/tenant"
 )
 
 // OutboxPublisher writes domain events to the outbox_events table inside the

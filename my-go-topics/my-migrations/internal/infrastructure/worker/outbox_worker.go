@@ -6,7 +6,8 @@ import (
 	"time"
 
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
-	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command"
+	commanddbpub "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command/public"
+	commanddbtenant "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command/tenant"
 )
 
 // OutboxWorker periodically reads unpublished events from each tenant's
@@ -15,11 +16,11 @@ import (
 // Here we log them as a stand-in.
 type OutboxWorker struct {
 	txManager *db.TxManager
-	publicQ   *commanddb.Queries
+	publicQ   *commanddbpub.Queries
 	interval  time.Duration
 }
 
-func NewOutboxWorker(txManager *db.TxManager, publicQ *commanddb.Queries, interval time.Duration) *OutboxWorker {
+func NewOutboxWorker(txManager *db.TxManager, publicQ *commanddbpub.Queries, interval time.Duration) *OutboxWorker {
 	return &OutboxWorker{
 		txManager: txManager,
 		publicQ:   publicQ,
@@ -60,7 +61,7 @@ func (w *OutboxWorker) ProcessOnce(ctx context.Context) error {
 }
 
 func (w *OutboxWorker) processTenant(ctx context.Context, schema string) error {
-	return w.txManager.WithinTransaction(ctx, schema, func(q *commanddb.Queries) error {
+	return w.txManager.WithinTransaction(ctx, schema, func(q *commanddbtenant.Queries) error {
 		events, err := q.SelectUnpublishedOutboxEvents(ctx)
 		if err != nil {
 			return err

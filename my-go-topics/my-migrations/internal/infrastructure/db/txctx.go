@@ -3,7 +3,7 @@ package db
 import (
 	"context"
 
-	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command"
+	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command/tenant"
 )
 
 type txQueriesKey struct{}

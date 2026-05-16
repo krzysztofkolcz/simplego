@@ -10,8 +10,8 @@ import (
 	appquery "github.com/krzysztofkolcz/mymigrations/internal/application/query"
 	"github.com/krzysztofkolcz/mymigrations/internal/domain/tenant"
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
-	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command"
-	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query"
+	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command/public"
+	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query/public"
 	publicrepo "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/repository/public"
 )
 

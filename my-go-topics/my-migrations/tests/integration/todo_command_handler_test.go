@@ -9,7 +9,7 @@ import (
 	"github.com/krzysztofkolcz/mymigrations/internal/application/command"
 	"github.com/krzysztofkolcz/mymigrations/internal/domain"
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
-	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query"
+	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query/tenant"
 	infraevent "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/event"
 	tenantrepo "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/repository/tenant"
 )

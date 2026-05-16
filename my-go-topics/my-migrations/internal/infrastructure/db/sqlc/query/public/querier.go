@@ -13,10 +13,7 @@ import (
 type Querier interface {
 	GetTenantByID(ctx context.Context, id uuid.UUID) (GetTenantByIDRow, error)
 	GetTenantBySchema(ctx context.Context, schemaName string) (GetTenantBySchemaRow, error)
-	GetTodo(ctx context.Context, id uuid.UUID) (Todo, error)
 	GetUserID(ctx context.Context, id uuid.UUID) (User, error)
-	ListIncompleteTodos(ctx context.Context) ([]Todo, error)
-	ListTodos(ctx context.Context) ([]Todo, error)
 }
 
 var _ Querier = (*Queries)(nil)

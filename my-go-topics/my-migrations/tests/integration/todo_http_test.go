@@ -14,8 +14,8 @@ import (
 	"github.com/krzysztofkolcz/mymigrations/internal/http/handler"
 	"github.com/krzysztofkolcz/mymigrations/internal/http/router"
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
-	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command"
-	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query"
+	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command/public"
+	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query/public"
 	infraevent "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/event"
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/usecase"
 )

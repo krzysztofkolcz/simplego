@@ -7,7 +7,7 @@ import (
 
 	"github.com/krzysztofkolcz/mymigrations/internal/domain/todo"
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
-	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query"
+	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query/tenant"
 )
 
 type TodoReadRepository struct {

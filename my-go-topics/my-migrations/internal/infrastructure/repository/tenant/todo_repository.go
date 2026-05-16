@@ -9,8 +9,8 @@ import (
 
 	"github.com/krzysztofkolcz/mymigrations/internal/domain"
 	"github.com/krzysztofkolcz/mymigrations/internal/domain/todo"
-	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command"
-	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query"
+	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command/tenant"
+	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query/tenant"
 )
 
 type TodoRepository struct {

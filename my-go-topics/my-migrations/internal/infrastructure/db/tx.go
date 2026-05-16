@@ -8,8 +8,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command"
-	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query"
+	commanddbpub "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command/public"
+	commanddbtenant "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command/tenant"
+	querydbpub "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query/public"
+	querydbtenant "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query/tenant"
 )
 
 var schemaRegex = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
@@ -30,7 +32,7 @@ func NewTxManager(
 func (m *TxManager) WithinTransaction(
 	ctx context.Context,
 	tenantSchema string,
-	fn func(q *commanddb.Queries) error,
+	fn func(q *commanddbtenant.Queries) error,
 ) error {
 
 	tx, err := m.pool.BeginTx(ctx, pgx.TxOptions{})
@@ -50,7 +52,7 @@ func (m *TxManager) WithinTransaction(
 		return err
 	}
 
-	q := commanddb.New(tx)
+	q := commanddbtenant.New(tx)
 
 	if err := fn(q); err != nil {
 		return err
@@ -94,7 +96,7 @@ func validateSchemaName(schema string) error {
 
 func (m *TxManager) WithinPublicTransaction(
 	ctx context.Context,
-	fn func(q *commanddb.Queries) error,
+	fn func(q *commanddbpub.Queries) error,
 ) error {
 
 	tx, err := m.pool.BeginTx(ctx, pgx.TxOptions{})
@@ -106,7 +108,7 @@ func (m *TxManager) WithinPublicTransaction(
 		_ = tx.Rollback(ctx)
 	}()
 
-	q := commanddb.New(tx)
+	q := commanddbpub.New(tx)
 
 	if err := fn(q); err != nil {
 		return err
@@ -121,7 +123,7 @@ func (m *TxManager) WithinPublicTransaction(
 
 func (m *TxManager) WithinPublicTransactionReadonly(
 	ctx context.Context,
-	fn func(q *querydb.Queries) error,
+	fn func(q *querydbpub.Queries) error,
 ) error {
 
 	tx, err := m.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
@@ -133,7 +135,7 @@ func (m *TxManager) WithinPublicTransactionReadonly(
 		_ = tx.Rollback(ctx)
 	}()
 
-	q := querydb.New(tx)
+	q := querydbpub.New(tx)
 
 	return fn(q)
 }
@@ -146,7 +148,7 @@ Used to set tenant.
 func (m *TxManager) WithinTransactionReadonly(
 	ctx context.Context,
 	tenantSchema string,
-	fn func(q *querydb.Queries) error,
+	fn func(q *querydbtenant.Queries) error,
 ) error {
 
 	tx, err := m.pool.BeginTx(
@@ -171,7 +173,7 @@ func (m *TxManager) WithinTransactionReadonly(
 		return err
 	}
 
-	q := querydb.New(tx)
+	q := querydbtenant.New(tx)
 
 	return fn(q)
 }

@@ -12,15 +12,11 @@ import (
 
 type Querier interface {
 	CompleteTodo(ctx context.Context, id uuid.UUID) error
-	CreateTenant(ctx context.Context, arg CreateTenantParams) (Tenant, error)
 	CreateTodo(ctx context.Context, arg CreateTodoParams) (Todo, error)
-	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteTodo(ctx context.Context, id uuid.UUID) error
 	InsertOutboxEvent(ctx context.Context, arg InsertOutboxEventParams) error
-	ListTenantSchemas(ctx context.Context) ([]string, error)
 	MarkOutboxEventPublished(ctx context.Context, id int64) error
 	SelectUnpublishedOutboxEvents(ctx context.Context) ([]SelectUnpublishedOutboxEventsRow, error)
-	UpdateTenantMigrationStatus(ctx context.Context, arg UpdateTenantMigrationStatusParams) error
 }
 
 var _ Querier = (*Queries)(nil)

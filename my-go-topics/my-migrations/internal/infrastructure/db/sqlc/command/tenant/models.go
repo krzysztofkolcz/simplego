@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.29.0
 
-package querydb
+package commanddb
 
 import (
 	"github.com/google/uuid"
@@ -17,23 +17,9 @@ type OutboxEvent struct {
 	PublishedAt pgtype.Timestamp `json:"published_at"`
 }
 
-type Tenant struct {
-	ID                 uuid.UUID        `json:"id"`
-	SchemaName         string           `json:"schema_name"`
-	CreatedAt          pgtype.Timestamp `json:"created_at"`
-	MigrationStatus    pgtype.Text      `json:"migration_status"`
-	MigrationError     pgtype.Text      `json:"migration_error"`
-	MigrationUpdatedAt pgtype.Timestamp `json:"migration_updated_at"`
-}
-
 type Todo struct {
 	ID        uuid.UUID        `json:"id"`
 	Title     string           `json:"title"`
 	Completed bool             `json:"completed"`
 	CreatedAt pgtype.Timestamp `json:"created_at"`
-}
-
-type User struct {
-	ID    uuid.UUID `json:"id"`
-	Email string    `json:"email"`
 }

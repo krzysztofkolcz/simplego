@@ -14,8 +14,8 @@ import (
 	"github.com/krzysztofkolcz/mymigrations/internal/http/handler"
 	"github.com/krzysztofkolcz/mymigrations/internal/http/router"
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db"
-	commanddb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command"
-	querydb "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query"
+	commanddbpub "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/command/public"
+	querydbpub "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/db/sqlc/query/public"
 	infraevent "github.com/krzysztofkolcz/mymigrations/internal/infrastructure/event"
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/usecase"
 	"github.com/krzysztofkolcz/mymigrations/internal/infrastructure/worker"
@@ -59,8 +59,8 @@ func main() {
 
 	// Wiring
 	txManager := db.NewTxManager(pool)
-	commandQ := commanddb.New(pool)
-	queryQ := querydb.New(pool)
+	commandQ := commanddbpub.New(pool)
+	queryQ := querydbpub.New(pool)
 	eventPublisher := infraevent.NewOutboxPublisher()
 
 	outboxWorker := worker.NewOutboxWorker(txManager, commandQ, 5*time.Second)
