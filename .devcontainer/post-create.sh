@@ -28,4 +28,6 @@ go install golang.org/x/tools/cmd/goimports@v0.38.0
 
 go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.4.1
 
+go install golang.org/x/tools/cmd/impl@latest
+
 echo "Done."
