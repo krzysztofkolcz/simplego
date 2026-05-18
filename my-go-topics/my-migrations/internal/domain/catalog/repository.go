@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type ComponentRepository interface {
+type Repository interface {
 	Create(ctx context.Context, c Component) error
 	GetByID(ctx context.Context, id uuid.UUID) (*Component, error)
 	List(ctx context.Context) ([]Component, error)
