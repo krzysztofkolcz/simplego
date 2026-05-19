@@ -12,11 +12,22 @@ import (
 
 type Querier interface {
 	CompleteTodo(ctx context.Context, id uuid.UUID) error
+	CreateComponent(ctx context.Context, arg CreateComponentParams) (Component, error)
+	CreateProduct(ctx context.Context, arg CreateProductParams) (Product, error)
 	CreateTodo(ctx context.Context, arg CreateTodoParams) (Todo, error)
+	DeleteComponent(ctx context.Context, id uuid.UUID) error
+	DeleteProduct(ctx context.Context, id uuid.UUID) error
+	DeleteProductComponent(ctx context.Context, arg DeleteProductComponentParams) error
 	DeleteTodo(ctx context.Context, id uuid.UUID) error
+	GetComponentByID(ctx context.Context, id uuid.UUID) (Component, error)
+	GetProductByID(ctx context.Context, id uuid.UUID) (Product, error)
 	InsertOutboxEvent(ctx context.Context, arg InsertOutboxEventParams) error
+	ListProductComponentsByProductID(ctx context.Context, productID uuid.UUID) ([]ProductComponent, error)
 	MarkOutboxEventPublished(ctx context.Context, id int64) error
 	SelectUnpublishedOutboxEvents(ctx context.Context) ([]SelectUnpublishedOutboxEventsRow, error)
+	UpdateComponent(ctx context.Context, arg UpdateComponentParams) error
+	UpdateProduct(ctx context.Context, arg UpdateProductParams) error
+	UpsertProductComponent(ctx context.Context, arg UpsertProductComponentParams) error
 }
 
 var _ Querier = (*Queries)(nil)

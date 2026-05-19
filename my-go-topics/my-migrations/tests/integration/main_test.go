@@ -30,6 +30,9 @@ var TenantSchema string
 var ExpectedTables = []string{
 	"todos",
 	"outbox_events",
+	"components",
+	"products",
+	"product_components",
 }
 
 func TestMain(m *testing.M) {

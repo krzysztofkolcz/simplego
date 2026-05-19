@@ -185,6 +185,100 @@ paths:
         "500":
           $ref: "#/components/responses/500"
 
+  # ── Catalog: Components (tenant-scoped) ───────────────────────────────────
+
+  /components:
+    post:
+      operationId: createComponent
+      summary: Create a new component (half-product)
+      tags: [catalog]
+      parameters:
+        - $ref: "#/components/parameters/XTenantID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateComponentRequest"
+      responses:
+        "201":
+          description: Component created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedResponse"
+        "400":
+          $ref: "#/components/responses/400"
+        "500":
+          $ref: "#/components/responses/500"
+
+  /components/{id}:
+    get:
+      operationId: getComponent
+      summary: Get a component by ID
+      tags: [catalog]
+      parameters:
+        - $ref: "#/components/parameters/XTenantID"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Component found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Component"
+        "404":
+          $ref: "#/components/responses/404"
+        "500":
+          $ref: "#/components/responses/500"
+
+  # ── Catalog: Products (tenant-scoped) ─────────────────────────────────────
+
+  /products:
+    post:
+      operationId: createProduct
+      summary: Create a new product
+      tags: [catalog]
+      parameters:
+        - $ref: "#/components/parameters/XTenantID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductRequest"
+      responses:
+        "201":
+          description: Product created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedResponse"
+        "400":
+          $ref: "#/components/responses/400"
+        "500":
+          $ref: "#/components/responses/500"
+
+  /products/{id}:
+    get:
+      operationId: getProduct
+      summary: Get a product by ID
+      tags: [catalog]
+      parameters:
+        - $ref: "#/components/parameters/XTenantID"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Product found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "404":
+          $ref: "#/components/responses/404"
+        "500":
+          $ref: "#/components/responses/500"
+
   /todos/{id}/complete:
     put:
       operationId: completeTodo
@@ -318,6 +412,118 @@ components:
       items:
         $ref: "#/components/schemas/Todo"
 
+
+    # ── Catalog ───────────────────────────────────────────────────────────────
+
+    CreateComponentRequest:
+      type: object
+      required: [name, code]
+      properties:
+        name:
+          type: string
+          example: Resistor 10kΩ
+        code:
+          type: string
+          example: RES-10K
+        description:
+          type: string
+        manufacturer:
+          type: string
+        manufacturer_url:
+          type: string
+        price:
+          type: number
+          format: double
+        weight_g:
+          type: integer
+        quantity:
+          type: integer
+          default: 0
+        image_url:
+          type: string
+
+    Component:
+      type: object
+      required: [id, name, code]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+        description:
+          type: string
+        manufacturer:
+          type: string
+        manufacturer_url:
+          type: string
+        price:
+          type: number
+          format: double
+        weight_g:
+          type: integer
+        quantity:
+          type: integer
+        image_url:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CreateProductRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: Widget Pro
+        description:
+          type: string
+        price:
+          type: number
+          format: double
+        tags:
+          type: array
+          items:
+            type: string
+
+    RecipeItem:
+      type: object
+      required: [component_id, quantity]
+      properties:
+        component_id:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+
+    Product:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+          format: double
+        tags:
+          type: array
+          items:
+            type: string
+        recipe:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecipeItem"
+        created_at:
+          type: string
+          format: date-time
 
     # ── Errors ────────────────────────────────────────────────────────────────
 

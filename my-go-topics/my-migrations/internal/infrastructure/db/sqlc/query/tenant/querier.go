@@ -11,8 +11,13 @@ import (
 )
 
 type Querier interface {
+	GetComponentByID(ctx context.Context, id uuid.UUID) (Component, error)
+	GetProductByID(ctx context.Context, id uuid.UUID) (Product, error)
 	GetTodo(ctx context.Context, id uuid.UUID) (Todo, error)
+	ListComponents(ctx context.Context) ([]Component, error)
 	ListIncompleteTodos(ctx context.Context) ([]Todo, error)
+	ListProductComponentsByProductID(ctx context.Context, productID uuid.UUID) ([]ProductComponent, error)
+	ListProducts(ctx context.Context) ([]Product, error)
 	ListTodos(ctx context.Context) ([]Todo, error)
 }
 

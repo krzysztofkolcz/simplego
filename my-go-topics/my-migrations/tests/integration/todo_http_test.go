@@ -36,6 +36,10 @@ func newTestServer() *httptest.Server {
 		usecase.NewGetTenantUseCase(commandQ, queryQ),
 		usecase.NewCreateUserUseCase(txManager),
 		usecase.NewGetUserUseCase(commandQ, queryQ),
+		usecase.NewCreateComponentUseCase(txManager, eventPublisher),
+		usecase.NewGetComponentUseCase(txManager),
+		usecase.NewCreateProductUseCase(txManager, eventPublisher),
+		usecase.NewGetProductUseCase(txManager),
 	)
 	return httptest.NewServer(router.New(srv))
 }

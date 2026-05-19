@@ -9,12 +9,41 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Component struct {
+	ID              uuid.UUID          `json:"id"`
+	Name            string             `json:"name"`
+	Description     pgtype.Text        `json:"description"`
+	Code            string             `json:"code"`
+	Manufacturer    pgtype.Text        `json:"manufacturer"`
+	ManufacturerUrl pgtype.Text        `json:"manufacturer_url"`
+	Price           pgtype.Numeric     `json:"price"`
+	WeightG         pgtype.Int4        `json:"weight_g"`
+	Quantity        int32              `json:"quantity"`
+	ImageUrl        pgtype.Text        `json:"image_url"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
 type OutboxEvent struct {
 	ID          int64            `json:"id"`
 	EventName   string           `json:"event_name"`
 	Payload     []byte           `json:"payload"`
 	CreatedAt   pgtype.Timestamp `json:"created_at"`
 	PublishedAt pgtype.Timestamp `json:"published_at"`
+}
+
+type Product struct {
+	ID          uuid.UUID          `json:"id"`
+	Name        string             `json:"name"`
+	Description pgtype.Text        `json:"description"`
+	Price       pgtype.Numeric     `json:"price"`
+	Tags        []string           `json:"tags"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+type ProductComponent struct {
+	ProductID   uuid.UUID `json:"product_id"`
+	ComponentID uuid.UUID `json:"component_id"`
+	Quantity    int32     `json:"quantity"`
 }
 
 type Todo struct {

@@ -26,7 +26,7 @@ func TestPublicMigrations(t *testing.T) {
 
 	assertTablesExists(t, ctx, ConnectionPool, TenantSchema, ExpectedTables)
 
-	assertMigrationVersion(t, ctx, ConnectionPool, TenantSchema, 2)
+	assertMigrationVersion(t, ctx, ConnectionPool, TenantSchema, 3)
 }
 
 func TestTenantMigrations(t *testing.T) {

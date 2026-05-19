@@ -6,7 +6,12 @@ import (
 	"github.com/google/uuid"
 )
 
-type ReadRepository interface {
-	GetByID(ctx context.Context, id uuid.UUID) (*Catalog, error)
-	List(ctx context.Context) ([]Catalog, error)
+type ComponentReadRepository interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*Component, error)
+	List(ctx context.Context) ([]Component, error)
+}
+
+type ProductReadRepository interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*Product, error)
+	List(ctx context.Context) ([]Product, error)
 }

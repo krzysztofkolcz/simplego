@@ -24,6 +24,42 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Component defines model for Component.
+type Component struct {
+	Code            string             `json:"code"`
+	CreatedAt       *time.Time         `json:"created_at,omitempty"`
+	Description     *string            `json:"description,omitempty"`
+	Id              openapi_types.UUID `json:"id"`
+	ImageUrl        *string            `json:"image_url,omitempty"`
+	Manufacturer    *string            `json:"manufacturer,omitempty"`
+	ManufacturerUrl *string            `json:"manufacturer_url,omitempty"`
+	Name            string             `json:"name"`
+	Price           *float64           `json:"price,omitempty"`
+	Quantity        *int               `json:"quantity,omitempty"`
+	WeightG         *int               `json:"weight_g,omitempty"`
+}
+
+// CreateComponentRequest defines model for CreateComponentRequest.
+type CreateComponentRequest struct {
+	Code            string   `json:"code"`
+	Description     *string  `json:"description,omitempty"`
+	ImageUrl        *string  `json:"image_url,omitempty"`
+	Manufacturer    *string  `json:"manufacturer,omitempty"`
+	ManufacturerUrl *string  `json:"manufacturer_url,omitempty"`
+	Name            string   `json:"name"`
+	Price           *float64 `json:"price,omitempty"`
+	Quantity        *int     `json:"quantity,omitempty"`
+	WeightG         *int     `json:"weight_g,omitempty"`
+}
+
+// CreateProductRequest defines model for CreateProductRequest.
+type CreateProductRequest struct {
+	Description *string   `json:"description,omitempty"`
+	Name        string    `json:"name"`
+	Price       *float64  `json:"price,omitempty"`
+	Tags        *[]string `json:"tags,omitempty"`
+}
+
 // CreateTenantRequest defines model for CreateTenantRequest.
 type CreateTenantRequest struct {
 	SchemaName string `json:"schema_name"`
@@ -65,6 +101,23 @@ type Error struct {
 // ErrorMessage defines model for ErrorMessage.
 type ErrorMessage struct {
 	Error DetailedError `json:"error"`
+}
+
+// Product defines model for Product.
+type Product struct {
+	CreatedAt   *time.Time         `json:"created_at,omitempty"`
+	Description *string            `json:"description,omitempty"`
+	Id          openapi_types.UUID `json:"id"`
+	Name        string             `json:"name"`
+	Price       *float64           `json:"price,omitempty"`
+	Recipe      *[]RecipeItem      `json:"recipe,omitempty"`
+	Tags        *[]string          `json:"tags,omitempty"`
+}
+
+// RecipeItem defines model for RecipeItem.
+type RecipeItem struct {
+	ComponentId openapi_types.UUID `json:"component_id"`
+	Quantity    int                `json:"quantity"`
 }
 
 // Tenant defines model for Tenant.
@@ -112,6 +165,30 @@ type N409 = ErrorMessage
 // N500 defines model for 500.
 type N500 = ErrorMessage
 
+// CreateComponentParams defines parameters for CreateComponent.
+type CreateComponentParams struct {
+	// XTenantID Tenant identifier — maps to the PostgreSQL schema for this tenant
+	XTenantID XTenantID `json:"X-Tenant-ID"`
+}
+
+// GetComponentParams defines parameters for GetComponent.
+type GetComponentParams struct {
+	// XTenantID Tenant identifier — maps to the PostgreSQL schema for this tenant
+	XTenantID XTenantID `json:"X-Tenant-ID"`
+}
+
+// CreateProductParams defines parameters for CreateProduct.
+type CreateProductParams struct {
+	// XTenantID Tenant identifier — maps to the PostgreSQL schema for this tenant
+	XTenantID XTenantID `json:"X-Tenant-ID"`
+}
+
+// GetProductParams defines parameters for GetProduct.
+type GetProductParams struct {
+	// XTenantID Tenant identifier — maps to the PostgreSQL schema for this tenant
+	XTenantID XTenantID `json:"X-Tenant-ID"`
+}
+
 // ListTodosParams defines parameters for ListTodos.
 type ListTodosParams struct {
 	// XTenantID Tenant identifier — maps to the PostgreSQL schema for this tenant
@@ -142,6 +219,12 @@ type CompleteTodoParams struct {
 	XTenantID XTenantID `json:"X-Tenant-ID"`
 }
 
+// CreateComponentJSONRequestBody defines body for CreateComponent for application/json ContentType.
+type CreateComponentJSONRequestBody = CreateComponentRequest
+
+// CreateProductJSONRequestBody defines body for CreateProduct for application/json ContentType.
+type CreateProductJSONRequestBody = CreateProductRequest
+
 // CreateTenantJSONRequestBody defines body for CreateTenant for application/json ContentType.
 type CreateTenantJSONRequestBody = CreateTenantRequest
 
@@ -153,6 +236,18 @@ type CreateUserJSONRequestBody = CreateUserRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Create a new component (half-product)
+	// (POST /components)
+	CreateComponent(w http.ResponseWriter, r *http.Request, params CreateComponentParams)
+	// Get a component by ID
+	// (GET /components/{id})
+	GetComponent(w http.ResponseWriter, r *http.Request, id ID, params GetComponentParams)
+	// Create a new product
+	// (POST /products)
+	CreateProduct(w http.ResponseWriter, r *http.Request, params CreateProductParams)
+	// Get a product by ID
+	// (GET /products/{id})
+	GetProduct(w http.ResponseWriter, r *http.Request, id ID, params GetProductParams)
 	// Create a new tenant
 	// (POST /tenants)
 	CreateTenant(w http.ResponseWriter, r *http.Request)
@@ -190,6 +285,200 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// CreateComponent operation middleware
+func (siw *ServerInterfaceWrapper) CreateComponent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateComponentParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Tenant-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Tenant-ID")]; found {
+		var XTenantID XTenantID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Tenant-ID", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Tenant-ID", valueList[0], &XTenantID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Tenant-ID", Err: err})
+			return
+		}
+
+		params.XTenantID = XTenantID
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Tenant-ID is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Tenant-ID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateComponent(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetComponent operation middleware
+func (siw *ServerInterfaceWrapper) GetComponent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetComponentParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Tenant-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Tenant-ID")]; found {
+		var XTenantID XTenantID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Tenant-ID", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Tenant-ID", valueList[0], &XTenantID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Tenant-ID", Err: err})
+			return
+		}
+
+		params.XTenantID = XTenantID
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Tenant-ID is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Tenant-ID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetComponent(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateProduct operation middleware
+func (siw *ServerInterfaceWrapper) CreateProduct(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateProductParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Tenant-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Tenant-ID")]; found {
+		var XTenantID XTenantID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Tenant-ID", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Tenant-ID", valueList[0], &XTenantID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Tenant-ID", Err: err})
+			return
+		}
+
+		params.XTenantID = XTenantID
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Tenant-ID is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Tenant-ID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateProduct(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetProduct operation middleware
+func (siw *ServerInterfaceWrapper) GetProduct(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetProductParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Tenant-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Tenant-ID")]; found {
+		var XTenantID XTenantID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Tenant-ID", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Tenant-ID", valueList[0], &XTenantID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Tenant-ID", Err: err})
+			return
+		}
+
+		params.XTenantID = XTenantID
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Tenant-ID is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Tenant-ID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProduct(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // CreateTenant operation middleware
 func (siw *ServerInterfaceWrapper) CreateTenant(w http.ResponseWriter, r *http.Request) {
@@ -636,6 +925,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc("POST "+options.BaseURL+"/components", wrapper.CreateComponent)
+	m.HandleFunc("GET "+options.BaseURL+"/components/{id}", wrapper.GetComponent)
+	m.HandleFunc("POST "+options.BaseURL+"/products", wrapper.CreateProduct)
+	m.HandleFunc("GET "+options.BaseURL+"/products/{id}", wrapper.GetProduct)
 	m.HandleFunc("POST "+options.BaseURL+"/tenants", wrapper.CreateTenant)
 	m.HandleFunc("GET "+options.BaseURL+"/tenants/{id}", wrapper.GetTenant)
 	m.HandleFunc("GET "+options.BaseURL+"/todos", wrapper.ListTodos)
@@ -656,6 +949,150 @@ type N404JSONResponse ErrorMessage
 type N409JSONResponse ErrorMessage
 
 type N500JSONResponse ErrorMessage
+
+type CreateComponentRequestObject struct {
+	Params CreateComponentParams
+	Body   *CreateComponentJSONRequestBody
+}
+
+type CreateComponentResponseObject interface {
+	VisitCreateComponentResponse(w http.ResponseWriter) error
+}
+
+type CreateComponent201JSONResponse CreatedResponse
+
+func (response CreateComponent201JSONResponse) VisitCreateComponentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateComponent400JSONResponse struct{ N400JSONResponse }
+
+func (response CreateComponent400JSONResponse) VisitCreateComponentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateComponent500JSONResponse struct{ N500JSONResponse }
+
+func (response CreateComponent500JSONResponse) VisitCreateComponentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetComponentRequestObject struct {
+	Id     ID `json:"id"`
+	Params GetComponentParams
+}
+
+type GetComponentResponseObject interface {
+	VisitGetComponentResponse(w http.ResponseWriter) error
+}
+
+type GetComponent200JSONResponse Component
+
+func (response GetComponent200JSONResponse) VisitGetComponentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetComponent404JSONResponse struct{ N404JSONResponse }
+
+func (response GetComponent404JSONResponse) VisitGetComponentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetComponent500JSONResponse struct{ N500JSONResponse }
+
+func (response GetComponent500JSONResponse) VisitGetComponentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateProductRequestObject struct {
+	Params CreateProductParams
+	Body   *CreateProductJSONRequestBody
+}
+
+type CreateProductResponseObject interface {
+	VisitCreateProductResponse(w http.ResponseWriter) error
+}
+
+type CreateProduct201JSONResponse CreatedResponse
+
+func (response CreateProduct201JSONResponse) VisitCreateProductResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateProduct400JSONResponse struct{ N400JSONResponse }
+
+func (response CreateProduct400JSONResponse) VisitCreateProductResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateProduct500JSONResponse struct{ N500JSONResponse }
+
+func (response CreateProduct500JSONResponse) VisitCreateProductResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetProductRequestObject struct {
+	Id     ID `json:"id"`
+	Params GetProductParams
+}
+
+type GetProductResponseObject interface {
+	VisitGetProductResponse(w http.ResponseWriter) error
+}
+
+type GetProduct200JSONResponse Product
+
+func (response GetProduct200JSONResponse) VisitGetProductResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetProduct404JSONResponse struct{ N404JSONResponse }
+
+func (response GetProduct404JSONResponse) VisitGetProductResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetProduct500JSONResponse struct{ N500JSONResponse }
+
+func (response GetProduct500JSONResponse) VisitGetProductResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
 
 type CreateTenantRequestObject struct {
 	Body *CreateTenantJSONRequestBody
@@ -1003,6 +1440,18 @@ func (response GetUser500JSONResponse) VisitGetUserResponse(w http.ResponseWrite
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// Create a new component (half-product)
+	// (POST /components)
+	CreateComponent(ctx context.Context, request CreateComponentRequestObject) (CreateComponentResponseObject, error)
+	// Get a component by ID
+	// (GET /components/{id})
+	GetComponent(ctx context.Context, request GetComponentRequestObject) (GetComponentResponseObject, error)
+	// Create a new product
+	// (POST /products)
+	CreateProduct(ctx context.Context, request CreateProductRequestObject) (CreateProductResponseObject, error)
+	// Get a product by ID
+	// (GET /products/{id})
+	GetProduct(ctx context.Context, request GetProductRequestObject) (GetProductResponseObject, error)
 	// Create a new tenant
 	// (POST /tenants)
 	CreateTenant(ctx context.Context, request CreateTenantRequestObject) (CreateTenantResponseObject, error)
@@ -1059,6 +1508,126 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// CreateComponent operation middleware
+func (sh *strictHandler) CreateComponent(w http.ResponseWriter, r *http.Request, params CreateComponentParams) {
+	var request CreateComponentRequestObject
+
+	request.Params = params
+
+	var body CreateComponentJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateComponent(ctx, request.(CreateComponentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateComponent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateComponentResponseObject); ok {
+		if err := validResponse.VisitCreateComponentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetComponent operation middleware
+func (sh *strictHandler) GetComponent(w http.ResponseWriter, r *http.Request, id ID, params GetComponentParams) {
+	var request GetComponentRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetComponent(ctx, request.(GetComponentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetComponent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetComponentResponseObject); ok {
+		if err := validResponse.VisitGetComponentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateProduct operation middleware
+func (sh *strictHandler) CreateProduct(w http.ResponseWriter, r *http.Request, params CreateProductParams) {
+	var request CreateProductRequestObject
+
+	request.Params = params
+
+	var body CreateProductJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateProduct(ctx, request.(CreateProductRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateProduct")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateProductResponseObject); ok {
+		if err := validResponse.VisitCreateProductResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetProduct operation middleware
+func (sh *strictHandler) GetProduct(w http.ResponseWriter, r *http.Request, id ID, params GetProductParams) {
+	var request GetProductRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetProduct(ctx, request.(GetProductRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetProduct")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetProductResponseObject); ok {
+		if err := validResponse.VisitGetProductResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // CreateTenant operation middleware
@@ -1318,29 +1887,35 @@ func (sh *strictHandler) GetUser(w http.ResponseWriter, r *http.Request, id ID) 
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/9RY227bOBD9FYK7j2qkbl2g0dMmsVsYSJzWcRYFisBgxLHNRhJVkkpjBAL2I/YL90sW",
-	"JGVdbMl2YjvNviS+cDhnzozOzPgRBzxKeAyxkth/xAkRJAIFwrzrd/VfFmMfJ0TNsINjEgH2MaPYwQJ+",
-	"pEwAxb4SKThYBjOIiLaYcBERhX2cpuakmifaSirB4inOMgd/HUFMYmUdUJCBYIliXHuy3yBGIVZswkCg",
-	"f//+B0UkkUhxpGaAPnOppgKuvpwj6xNNuEBqxiRSxhg7FvQMCAVRwv76xl7+pt/dCX+mjWXCYwmGp47n",
-	"6X8BjxXESr8kSRKygOiQ3O9Sx/WI4YFESWgtFub69T0JU/MChODCXkS1v9OT7njY+3LduxphB0cgJZnq",
-	"z4fwIwWp0C2ncxRzhXQOQ6ZZ+8nUDMkEAjbJ3WMHS0VUKrHf8bzMgC8j/V3ABPv4N7csA9d+K92ehnOR",
-	"ezV29USdEoqEhYIzB3e8ziFIGFyOxh8vrwfdJQokT0UAJvwJT2Nai7OzzzgHhQsT5fEhojy7HHw875+N",
-	"moMkoQBC5wgemFSyFunxPiM94/EkZIFJ5/vD1HR/MOoNByfn46ve8K/ecNwbDi+Htaj7sQIRkxBJEPcg",
-	"kL2hjPn9fqu42V15vwntTABRYMUjf/qMWgqegFDMxm/Pj63WFNRgH5MggkYVLBXoW836pjjMb7+DzUcO",
-	"gVPeCkAxFS65Pk3nKGLh3Ub31rbd8bUE0eoYIsLCuuNUgvgzf3sU8Ag7para45sQ2VPtiOiwUm91PIxu",
-	"14Wq7hht9NUFRVgItLeoYxKGlxPsf9ui6nDmLCOj5joLUkEkt6pejSMHRoQgc5xDB6nGW4VaPjyPi69Y",
-	"rGAK9moipqAq37VVqL1jlaUm3gq+6vFbFagWSlXfV2Ab9XmoYis9FIpRva2xL6wPy0Aqr2sN5qL0t1T9",
-	"i1DXJbJeRyu1bj5tcm01p4FI+wyMiarlnxIFbxRr0hsHb1krEZsKo/LjIrKS4PUGZZmVFjINApByvWGa",
-	"aOR0+1h2E1sT+CbF1VrbVMHaUY41t7nlPAQSm4o9XF52kXd7o7nAqYTQFvY5szK/lUYZnhokSreMQ/UK",
-	"57ka77T2FX2YxRNe6aT4Yo4uFjUq0cnnPnbwPQhpR4e3R96Rp7HwBGKSMOzjd0fe0TvsmHXJhOvajcQu",
-	"V9yyqukwV/apHroqswUuhP2U0/kW89d2M1DT+JLVydEr0PJa84f3ds8Qyp7dMInli1/+BNlh22u7twDq",
-	"6kPlYL7p7HFltl1/Vh8yY2AaRUTMi0whgmL4WW6aikylmaDyRN9oo0Xa3UdGM+0r77D11H8CVeS9unm3",
-	"DBflEbffNW13KV3e3tKVw2rPUmUh6mzDe2cH3j+BQiQnHN3OkdneW2jnlMtWvrWsjcyJp/Jd/l5xWNoX",
-	"2ttAfMikQja+Jz4az6S94rBCt3l/kznr1Uy3hF05PpgOVnaoV6iCnPLnauBedM2mbjnfxcNVKBoFPUOs",
-	"VkDXfL5rBTjPlMBOww+KmlGL9qUUy3KgRauZTae9H/wi3varYa2F/Qvahna70jQaq9pdDMZmWEub1C0/",
-	"8NqqOyLiDigiEpWz/RNJfoH56YKIu0VGalCbE6PXgo1zs1kyDtktqj98vb5uodH9Xybm1KZqkWqb3kqq",
-	"N87Kea5f16RsQLVl5uXlTjO5IncF1drA/MxtqasjPucBCRGFewh5EoHZSlIRYh/PlEp81w31gRmXyv/g",
-	"ffDc+7c4u8n+CwAA//9cTnJ8QhwAAA==",
+	"H4sIAAAAAAAC/9Ra627bNhR+FYLbjw1QYmV1gda/1iRuYSy3OulWoAgMRjq22UiiSlJpjcDAHmIvsZfZ",
+	"Q+xJBpK6m7LV+BLvTxtbPNfv3HjkR+yxMGYRRFLg3iOOCSchSOD60+BU/Usj3MMxkVPs4IiEgHuY+tjB",
+	"HL4klIOPe5In4GDhTSEkimLMeEgk7uEk0SflLFZUQnIaTfB87uCPNxCRSBoBPgiP01hSpiSZJ4j6EEk6",
+	"psDRv3/+hUISCyQZklNAV0zICYfr92fIyERjxpGcUoGkJsaOUXoKxAdeqP3xwDA/GJyupf9cEYuYRQK0",
+	"n7quq/7zWCQhkupPEscB9YgyqfNZKLseMXwjYRwYioxc/f1AgkT/AZwzbhj5St7xm9PRsP/+Q//6Bjs4",
+	"BCHIRH0/hC8JCInumD9DEZNIYRhQ5bWvVE6RiMGj41Q8drCQRCYC97quO9fKF5b+yGGMe/iHThEGHfNU",
+	"dPpKnfNUqqarAnVMfMSNKnju4K7b3YYTLi5vRm8vP1yc1lwgWMI90OaPWRL5FTu7m7TzIhehrXy9DStP",
+	"Li/eng1ObuxGkoAD8WcIvlEhRcXS15u09IRF44B6Gs6X24npwcVNf3jx5mx03R/+3h+O+sPh5bBi9SCS",
+	"wCMSIAH8ATgyHAqbX242iu3iCv7atJOMr66RnMXAJTVWG7se6zXCwR4HIsEfEVkpKT6RcCBpCIt1paaa",
+	"hSf1W5QnB9OQTGCU8MDKJCRRMiaeTDjwlQcauZiSankQc+pB1WSW3AUle6MkvAOuzn5JSCSpnJUY0UjC",
+	"xDz9CnQylaOJ7em8XL8/mYakVXIMIre5NHb3GUxIn2hEcizTMtoMaRrcKhP71wdH7m9PgmyHWJQUBkGF",
+	"ZBwduff//G3T+6kw+TAmSSBxz3XWg6wdWlec+YnXjNUq9y+65g/qT0CiK87WdYskE60DlRAKq/T0C8I5",
+	"mdkd0Gy5GVUaDTfVabRoH/FstaUmu0y9RAXms0YFJJVBTfRxMkMhDe5Xije0zYI/COCNgiEkNKgKTgTw",
+	"X9OPhx4LsVPgZ46v0sicatbIH5a6W1WfVkV5sV7ZZJ2CJDQAv591TRIEl2Pc+9Six+G5s5gcil01Rtvw",
+	"qcWtUR2EHLXsP1mrthV1SfgEpCVb6hFqeCx6yea33F+rCnl5mlzs2GrW+VbWrZCQzye1Krs4hS43S6tU",
+	"sGs05ryQV4v+zNRlQFbjaCHW9bc20Wm1tXjy+YaZjQwaHDwaQ+tEGOrjAwmhLRvWrPvFrGKDoCTaEs+p",
+	"pm0Tcdl8tRCYJd4lSpuOpjVtJkpaWhLSCddXj1GeAEUeLicoqlFBIRLPAyGWEyax0txvb8t6PVkbvqox",
+	"q5ZsD4wAUl1TmjvGAiDRU68iLXFZZwowHDUDp2RCk9ln1EwDrTJY+8mSu2qy2NZI4Tx1FHAaxw91mEZj",
+	"Vhq48PkMnWcxKtCbqwF28ANwYe6zR4fuoat0YTFEJKa4h18cuocvsKN3eNrcTm3px4xjlUc014GPe/Xb",
+	"kqYvloMNE0lxpFOs+FTLTieIY+bPWqwV2l3tG+5z86qHJU+gvrD7xT3asBbFfGjdq6RUKM1Es0lym1jn",
+	"unbUoWIZs/ysOqT3FkkYEj7LIUQERfAV5TTopykJxgex6fU/46yhfcIekSRgE3yr2JSFPFJ/rhRIJ7dq",
+	"oLwDuZEocVYezmOpAqW7OShzM5aCWFoGdttA2F0DwncgESlhdzdDenlthyzFdGVWZ3PevuZ07da/fxmd",
+	"Kvic+RznGC6PhZXJu4FgeP7UzYxYgtXu0zaFYEXSmndWK3P2Jnu1tb20q66c9i/r0leDT0y69NXNqrOv",
+	"N5Wg+bvIDPYM6ArsK9Mzx/37snPbCZeq1YzS7tPNeHQh22puZz4Tjf5Wd4wbfWLd1rgtt2cXIYvjAyok",
+	"Mvbtph+VBJbcrT/fzp3l1Uzdz/Z1/CjvvfewCjKfPefgIQ10dbzz5Mormg/qQr8YAaf6+3Uj4KkzR9fy",
+	"kxPlUaPtriqW8YEqWnZvOs394Jn8ttka1hjYz9A2lNiFpmGN6k62pdLDWmKrbumBfYvukPB78BERqFi0",
+	"faeTdzA/nRN+nyFSUdUOTCLSH6ot6zR647fNblF+Wbl/3UJp93+ZmBMDVQa1gbcE9cpZOcV6vyZlrVQT",
+	"Mrsvd8qTC+Uud7Ui0D+EMq6ranzGPBIgHx4gYHFo1n36Nyl4KmXc63QCdWDKhOy9cl+5nYcjPL+d/xcA",
+	"AP//bw+NKWQqAAA=",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
