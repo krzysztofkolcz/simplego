@@ -131,6 +131,57 @@ func (s *Server) GetProduct(
 	}, nil
 }
 
+func (s *Server) SetProductComponent(
+	ctx context.Context,
+	req httpapi.SetProductComponentRequestObject,
+) (httpapi.SetProductComponentResponseObject, error) {
+	productID := req.Id
+	componentID := req.ComponentId
+
+	err := s.setProductComponent.Handle(ctx,
+		appcommand.SetProductComponentCommand{
+			TenantSchema: tenantSchema(req.Params.XTenantID),
+			ProductID:    productID,
+			ComponentID:  componentID,
+			Quantity:     req.Body.Quantity,
+		})
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return httpapi.SetProductComponent404JSONResponse{N404JSONResponse: notFoundError()}, nil
+		}
+		if errors.Is(err, catalog.ErrInvalidQuantity) {
+			return httpapi.SetProductComponent400JSONResponse{N400JSONResponse: badRequestError(err.Error())}, nil
+		}
+		return httpapi.SetProductComponent500JSONResponse{N500JSONResponse: internalError(err)}, nil
+	}
+
+	return httpapi.SetProductComponent204Response{}, nil
+}
+
+func (s *Server) RemoveProductComponent(
+	ctx context.Context,
+	req httpapi.RemoveProductComponentRequestObject,
+) (httpapi.RemoveProductComponentResponseObject, error) {
+	err := s.removeProductComponent.Handle(ctx,
+		appcommand.RemoveProductComponentCommand{
+			TenantSchema: tenantSchema(req.Params.XTenantID),
+			ProductID:    req.Id,
+			ComponentID:  req.ComponentId,
+		},
+	)
+	if err != nil {
+		if errors.Is (err, domain.ErrNotFound){
+			return httpapi.RemoveProductComponent404JSONResponse{N404JSONResponse: notFoundError()}, nil
+		}
+		if errors.Is(err, catalog.ErrComponentNotFound) {
+			return httpapi.RemoveProductComponent404JSONResponse{N404JSONResponse: notFoundError()}, nil
+		}
+		return httpapi.RemoveProductComponent500JSONResponse{N500JSONResponse: internalError(err)}, nil
+	}
+
+	return httpapi.RemoveProductComponent204Response{}, nil
+}
+
 // helpers for optional pointer fields from generated request types
 
 func strVal(p *string) string {

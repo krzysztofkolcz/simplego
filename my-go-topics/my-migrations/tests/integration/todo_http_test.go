@@ -40,6 +40,8 @@ func newTestServer() *httptest.Server {
 		usecase.NewGetComponentUseCase(txManager),
 		usecase.NewCreateProductUseCase(txManager, eventPublisher),
 		usecase.NewGetProductUseCase(txManager),
+		usecase.NewSetProductComponentUseCase(txManager, eventPublisher),
+		usecase.NewRemoveProductComponentUseCase(txManager, eventPublisher),
 	)
 	return httptest.NewServer(router.New(srv))
 }

@@ -120,6 +120,11 @@ type RecipeItem struct {
 	Quantity    int                `json:"quantity"`
 }
 
+// SetProductComponentRequest defines model for SetProductComponentRequest.
+type SetProductComponentRequest struct {
+	Quantity int `json:"quantity"`
+}
+
 // Tenant defines model for Tenant.
 type Tenant struct {
 	CreatedAt        *time.Time         `json:"created_at,omitempty"`
@@ -146,6 +151,9 @@ type User struct {
 	Email openapi_types.Email `json:"email"`
 	Id    openapi_types.UUID  `json:"id"`
 }
+
+// ComponentID defines model for ComponentID.
+type ComponentID = openapi_types.UUID
 
 // ID defines model for ID.
 type ID = openapi_types.UUID
@@ -189,6 +197,18 @@ type GetProductParams struct {
 	XTenantID XTenantID `json:"X-Tenant-ID"`
 }
 
+// RemoveProductComponentParams defines parameters for RemoveProductComponent.
+type RemoveProductComponentParams struct {
+	// XTenantID Tenant identifier — maps to the PostgreSQL schema for this tenant
+	XTenantID XTenantID `json:"X-Tenant-ID"`
+}
+
+// SetProductComponentParams defines parameters for SetProductComponent.
+type SetProductComponentParams struct {
+	// XTenantID Tenant identifier — maps to the PostgreSQL schema for this tenant
+	XTenantID XTenantID `json:"X-Tenant-ID"`
+}
+
 // ListTodosParams defines parameters for ListTodos.
 type ListTodosParams struct {
 	// XTenantID Tenant identifier — maps to the PostgreSQL schema for this tenant
@@ -225,6 +245,9 @@ type CreateComponentJSONRequestBody = CreateComponentRequest
 // CreateProductJSONRequestBody defines body for CreateProduct for application/json ContentType.
 type CreateProductJSONRequestBody = CreateProductRequest
 
+// SetProductComponentJSONRequestBody defines body for SetProductComponent for application/json ContentType.
+type SetProductComponentJSONRequestBody = SetProductComponentRequest
+
 // CreateTenantJSONRequestBody defines body for CreateTenant for application/json ContentType.
 type CreateTenantJSONRequestBody = CreateTenantRequest
 
@@ -248,6 +271,12 @@ type ServerInterface interface {
 	// Get a product by ID
 	// (GET /products/{id})
 	GetProduct(w http.ResponseWriter, r *http.Request, id ID, params GetProductParams)
+	// Usuń komponent z receptury produktu
+	// (DELETE /products/{id}/components/{componentId})
+	RemoveProductComponent(w http.ResponseWriter, r *http.Request, id ID, componentId ComponentID, params RemoveProductComponentParams)
+	// Dodaj lub zaktualizuj komponent w recepturze produktu
+	// (PUT /products/{id}/components/{componentId})
+	SetProductComponent(w http.ResponseWriter, r *http.Request, id ID, componentId ComponentID, params SetProductComponentParams)
 	// Create a new tenant
 	// (POST /tenants)
 	CreateTenant(w http.ResponseWriter, r *http.Request)
@@ -471,6 +500,130 @@ func (siw *ServerInterfaceWrapper) GetProduct(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetProduct(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveProductComponent operation middleware
+func (siw *ServerInterfaceWrapper) RemoveProductComponent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "componentId" -------------
+	var componentId ComponentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "componentId", r.PathValue("componentId"), &componentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "componentId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemoveProductComponentParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Tenant-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Tenant-ID")]; found {
+		var XTenantID XTenantID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Tenant-ID", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Tenant-ID", valueList[0], &XTenantID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Tenant-ID", Err: err})
+			return
+		}
+
+		params.XTenantID = XTenantID
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Tenant-ID is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Tenant-ID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveProductComponent(w, r, id, componentId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetProductComponent operation middleware
+func (siw *ServerInterfaceWrapper) SetProductComponent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "componentId" -------------
+	var componentId ComponentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "componentId", r.PathValue("componentId"), &componentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "componentId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetProductComponentParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Tenant-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Tenant-ID")]; found {
+		var XTenantID XTenantID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Tenant-ID", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Tenant-ID", valueList[0], &XTenantID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Tenant-ID", Err: err})
+			return
+		}
+
+		params.XTenantID = XTenantID
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Tenant-ID is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Tenant-ID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetProductComponent(w, r, id, componentId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -929,6 +1082,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/components/{id}", wrapper.GetComponent)
 	m.HandleFunc("POST "+options.BaseURL+"/products", wrapper.CreateProduct)
 	m.HandleFunc("GET "+options.BaseURL+"/products/{id}", wrapper.GetProduct)
+	m.HandleFunc("DELETE "+options.BaseURL+"/products/{id}/components/{componentId}", wrapper.RemoveProductComponent)
+	m.HandleFunc("PUT "+options.BaseURL+"/products/{id}/components/{componentId}", wrapper.SetProductComponent)
 	m.HandleFunc("POST "+options.BaseURL+"/tenants", wrapper.CreateTenant)
 	m.HandleFunc("GET "+options.BaseURL+"/tenants/{id}", wrapper.GetTenant)
 	m.HandleFunc("GET "+options.BaseURL+"/todos", wrapper.ListTodos)
@@ -1088,6 +1243,88 @@ func (response GetProduct404JSONResponse) VisitGetProductResponse(w http.Respons
 type GetProduct500JSONResponse struct{ N500JSONResponse }
 
 func (response GetProduct500JSONResponse) VisitGetProductResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RemoveProductComponentRequestObject struct {
+	Id          ID          `json:"id"`
+	ComponentId ComponentID `json:"componentId"`
+	Params      RemoveProductComponentParams
+}
+
+type RemoveProductComponentResponseObject interface {
+	VisitRemoveProductComponentResponse(w http.ResponseWriter) error
+}
+
+type RemoveProductComponent204Response struct {
+}
+
+func (response RemoveProductComponent204Response) VisitRemoveProductComponentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RemoveProductComponent404JSONResponse struct{ N404JSONResponse }
+
+func (response RemoveProductComponent404JSONResponse) VisitRemoveProductComponentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RemoveProductComponent500JSONResponse struct{ N500JSONResponse }
+
+func (response RemoveProductComponent500JSONResponse) VisitRemoveProductComponentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetProductComponentRequestObject struct {
+	Id          ID          `json:"id"`
+	ComponentId ComponentID `json:"componentId"`
+	Params      SetProductComponentParams
+	Body        *SetProductComponentJSONRequestBody
+}
+
+type SetProductComponentResponseObject interface {
+	VisitSetProductComponentResponse(w http.ResponseWriter) error
+}
+
+type SetProductComponent204Response struct {
+}
+
+func (response SetProductComponent204Response) VisitSetProductComponentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type SetProductComponent400JSONResponse struct{ N400JSONResponse }
+
+func (response SetProductComponent400JSONResponse) VisitSetProductComponentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetProductComponent404JSONResponse struct{ N404JSONResponse }
+
+func (response SetProductComponent404JSONResponse) VisitSetProductComponentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetProductComponent500JSONResponse struct{ N500JSONResponse }
+
+func (response SetProductComponent500JSONResponse) VisitSetProductComponentResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
 
@@ -1452,6 +1689,12 @@ type StrictServerInterface interface {
 	// Get a product by ID
 	// (GET /products/{id})
 	GetProduct(ctx context.Context, request GetProductRequestObject) (GetProductResponseObject, error)
+	// Usuń komponent z receptury produktu
+	// (DELETE /products/{id}/components/{componentId})
+	RemoveProductComponent(ctx context.Context, request RemoveProductComponentRequestObject) (RemoveProductComponentResponseObject, error)
+	// Dodaj lub zaktualizuj komponent w recepturze produktu
+	// (PUT /products/{id}/components/{componentId})
+	SetProductComponent(ctx context.Context, request SetProductComponentRequestObject) (SetProductComponentResponseObject, error)
 	// Create a new tenant
 	// (POST /tenants)
 	CreateTenant(ctx context.Context, request CreateTenantRequestObject) (CreateTenantResponseObject, error)
@@ -1623,6 +1866,69 @@ func (sh *strictHandler) GetProduct(w http.ResponseWriter, r *http.Request, id I
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetProductResponseObject); ok {
 		if err := validResponse.VisitGetProductResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveProductComponent operation middleware
+func (sh *strictHandler) RemoveProductComponent(w http.ResponseWriter, r *http.Request, id ID, componentId ComponentID, params RemoveProductComponentParams) {
+	var request RemoveProductComponentRequestObject
+
+	request.Id = id
+	request.ComponentId = componentId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveProductComponent(ctx, request.(RemoveProductComponentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveProductComponent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveProductComponentResponseObject); ok {
+		if err := validResponse.VisitRemoveProductComponentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetProductComponent operation middleware
+func (sh *strictHandler) SetProductComponent(w http.ResponseWriter, r *http.Request, id ID, componentId ComponentID, params SetProductComponentParams) {
+	var request SetProductComponentRequestObject
+
+	request.Id = id
+	request.ComponentId = componentId
+	request.Params = params
+
+	var body SetProductComponentJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetProductComponent(ctx, request.(SetProductComponentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetProductComponent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetProductComponentResponseObject); ok {
+		if err := validResponse.VisitSetProductComponentResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -1887,35 +2193,38 @@ func (sh *strictHandler) GetUser(w http.ResponseWriter, r *http.Request, id ID) 
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"AP//bw+NKWQqAAA=",
+	"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",
+	"8f8AAAD//6dNnCuQLwAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

@@ -279,6 +279,49 @@ paths:
         "500":
           $ref: "#/components/responses/500"
 
+  # ── Catalog: Recipe (komponenty produktu) ────────────────────────────────
+
+  /products/{id}/components/{componentId}:
+    put:
+      operationId: setProductComponent
+      summary: Dodaj lub zaktualizuj komponent w recepturze produktu
+      tags: [catalog]
+      parameters:
+        - $ref: "#/components/parameters/XTenantID"
+        - $ref: "#/components/parameters/ID"
+        - $ref: "#/components/parameters/ComponentID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetProductComponentRequest"
+      responses:
+        "204":
+          description: Komponent ustawiony w recepturze
+        "400":
+          $ref: "#/components/responses/400"
+        "404":
+          $ref: "#/components/responses/404"
+        "500":
+          $ref: "#/components/responses/500"
+
+    delete:
+      operationId: removeProductComponent
+      summary: Usuń komponent z receptury produktu
+      tags: [catalog]
+      parameters:
+        - $ref: "#/components/parameters/XTenantID"
+        - $ref: "#/components/parameters/ID"
+        - $ref: "#/components/parameters/ComponentID"
+      responses:
+        "204":
+          description: Komponent usunięty z receptury
+        "404":
+          $ref: "#/components/responses/404"
+        "500":
+          $ref: "#/components/responses/500"
+
   /todos/{id}/complete:
     put:
       operationId: completeTodo
@@ -302,6 +345,14 @@ components:
   parameters:
     ID:
       name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    ComponentID:
+      name: componentId
       in: path
       required: true
       schema:
@@ -414,6 +465,15 @@ components:
 
 
     # ── Catalog ───────────────────────────────────────────────────────────────
+
+    SetProductComponentRequest:
+      type: object
+      required: [quantity]
+      properties:
+        quantity:
+          type: integer
+          minimum: 1
+          example: 10
 
     CreateComponentRequest:
       type: object

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -247,4 +248,205 @@ func TestHTTP_CreateComponent_DuplicateCode(t *testing.T) {
 		resp.Body.Close()
 		assert.Equal(t, expectedStatus, resp.StatusCode, "attempt %d", i+1)
 	}
+}
+
+func createProductHTTP(t *testing.T, tsURL string) string {
+	t.Helper()
+	body := bytes.NewBufferString(`{"name":"Test Product"}`)
+	req, _ := http.NewRequest(http.MethodPost, catalogURL(tsURL, "/products"), body)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Tenant-ID", TenantId)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	var result map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	return result["id"].(string)
+}
+
+func createComponentHTTP(t *testing.T, tsURL string) string {
+	t.Helper()
+	body := fmt.Sprintf(`{"name":"Test Component","code":%q}`, uuid.New().String())
+	req, _ := http.NewRequest(http.MethodPost, catalogURL(tsURL, "/components"), bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Tenant-ID", TenantId)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	var result map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	return result["id"].(string)
+}
+
+// ── Recipe ─────────────────────────────────────────────────────────────────
+
+func TestHTTP_SetProductComponent_OK(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	productID := createProductHTTP(t, ts.URL)
+	componentID := createComponentHTTP(t, ts.URL)
+
+	body := bytes.NewBufferString(`{"quantity":3}`)
+	req, _ := http.NewRequest(http.MethodPut, catalogURL(ts.URL, "/products/"+productID+"/components/"+componentID), body)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Tenant-ID", TenantId)
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	req, _ = http.NewRequest(http.MethodGet, catalogURL(ts.URL, "/products/"+productID), nil)
+	req.Header.Set("X-Tenant-ID", TenantId)
+	resp, err = http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	recipe := got["recipe"].([]any)
+	require.Len(t, recipe, 1)
+	item := recipe[0].(map[string]any)
+	assert.Equal(t, componentID, item["component_id"])
+	assert.Equal(t, float64(3), item["quantity"])
+}
+
+func TestHTTP_SetProductComponent_Update(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	productID := createProductHTTP(t, ts.URL)
+	componentID := createComponentHTTP(t, ts.URL)
+
+	for _, quantity := range []string{`{"quantity":3}`, `{"quantity":7}`} {
+		req, _ := http.NewRequest(http.MethodPut, catalogURL(ts.URL, "/products/"+productID+"/components/"+componentID), bytes.NewBufferString(quantity))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Tenant-ID", TenantId)
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		resp.Body.Close()
+		require.Equal(t, http.StatusNoContent, resp.StatusCode)
+	}
+
+	req, _ := http.NewRequest(http.MethodGet, catalogURL(ts.URL, "/products/"+productID), nil)
+	req.Header.Set("X-Tenant-ID", TenantId)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	recipe := got["recipe"].([]any)
+	require.Len(t, recipe, 1)
+	assert.Equal(t, float64(7), recipe[0].(map[string]any)["quantity"])
+}
+
+func TestHTTP_SetProductComponent_InvalidQuantity(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	productID := createProductHTTP(t, ts.URL)
+	componentID := createComponentHTTP(t, ts.URL)
+
+	body := bytes.NewBufferString(`{"quantity":0}`)
+	req, _ := http.NewRequest(http.MethodPut, catalogURL(ts.URL, "/products/"+productID+"/components/"+componentID), body)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Tenant-ID", TenantId)
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
+func TestHTTP_SetProductComponent_ProductNotFound(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	body := bytes.NewBufferString(`{"quantity":1}`)
+	req, _ := http.NewRequest(
+		http.MethodPut,
+		catalogURL(ts.URL, "/products/00000000-0000-0000-0000-000000000001/components/00000000-0000-0000-0000-000000000002"),
+		body,
+	)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Tenant-ID", TenantId)
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestHTTP_RemoveProductComponent_OK(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	productID := createProductHTTP(t, ts.URL)
+	componentID := createComponentHTTP(t, ts.URL)
+
+	setReq, _ := http.NewRequest(http.MethodPut, catalogURL(ts.URL, "/products/"+productID+"/components/"+componentID), bytes.NewBufferString(`{"quantity":2}`))
+	setReq.Header.Set("Content-Type", "application/json")
+	setReq.Header.Set("X-Tenant-ID", TenantId)
+	setResp, err := http.DefaultClient.Do(setReq)
+	require.NoError(t, err)
+	setResp.Body.Close()
+	require.Equal(t, http.StatusNoContent, setResp.StatusCode)
+
+	delReq, _ := http.NewRequest(http.MethodDelete, catalogURL(ts.URL, "/products/"+productID+"/components/"+componentID), nil)
+	delReq.Header.Set("X-Tenant-ID", TenantId)
+	delResp, err := http.DefaultClient.Do(delReq)
+	require.NoError(t, err)
+	delResp.Body.Close()
+	require.Equal(t, http.StatusNoContent, delResp.StatusCode)
+
+	req, _ := http.NewRequest(http.MethodGet, catalogURL(ts.URL, "/products/"+productID), nil)
+	req.Header.Set("X-Tenant-ID", TenantId)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	assert.Empty(t, got["recipe"])
+}
+
+func TestHTTP_RemoveProductComponent_ProductNotFound(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	req, _ := http.NewRequest(
+		http.MethodDelete,
+		catalogURL(ts.URL, "/products/00000000-0000-0000-0000-000000000001/components/00000000-0000-0000-0000-000000000002"),
+		nil,
+	)
+	req.Header.Set("X-Tenant-ID", TenantId)
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestHTTP_RemoveProductComponent_ComponentNotInRecipe(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	productID := createProductHTTP(t, ts.URL)
+
+	req, _ := http.NewRequest(
+		http.MethodDelete,
+		catalogURL(ts.URL, "/products/"+productID+"/components/00000000-0000-0000-0000-000000000001"),
+		nil,
+	)
+	req.Header.Set("X-Tenant-ID", TenantId)
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }

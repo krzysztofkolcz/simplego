@@ -80,6 +80,8 @@ func main() {
 		usecase.NewGetComponentUseCase(txManager),
 		usecase.NewCreateProductUseCase(txManager, eventPublisher),
 		usecase.NewGetProductUseCase(txManager),
+		usecase.NewSetProductComponentUseCase(txManager, eventPublisher),
+		usecase.NewRemoveProductComponentUseCase(txManager, eventPublisher),
 	)
 	httpHandler := router.New(srv)
 

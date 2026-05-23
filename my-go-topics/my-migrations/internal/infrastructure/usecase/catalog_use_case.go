@@ -66,3 +66,34 @@ func (u *getProductUseCase) Handle(ctx context.Context, q appquery.GetProductQue
 	repo := catalogrepo.NewProductReadRepository(u.txManager, q.TenantSchema)
 	return appquery.NewGetProductHandler(repo).Handle(ctx, q)
 }
+
+type setProductComponentUseCase struct {
+	txManager      *db.TxManager
+	eventPublisher domain.EventPublisher
+}
+
+func NewSetProductComponentUseCase(txManager *db.TxManager, eventPublisher domain.EventPublisher) port.SetProductComponentPort {
+
+	return &setProductComponentUseCase{txManager: txManager, eventPublisher: eventPublisher}
+}
+
+func (u *setProductComponentUseCase) Handle(ctx context.Context, q appcommand.SetProductComponentCommand) error {
+	uow := catalogrepo.NewCatalogUnitOfWork(u.txManager, q.TenantSchema)
+	return appcommand.NewSetProductComponentHandler(uow, u.eventPublisher).Handle(ctx, q)
+}
+
+
+type removeProductComponentUseCase struct {
+	txManager      *db.TxManager
+	eventPublisher domain.EventPublisher
+}
+
+func NewRemoveProductComponentUseCase(txManager *db.TxManager, eventPublisher domain.EventPublisher) port.RemoveProductComponentPort {
+
+	return &removeProductComponentUseCase{txManager: txManager, eventPublisher: eventPublisher}
+}
+
+func (u *removeProductComponentUseCase) Handle(ctx context.Context, q appcommand.RemoveProductComponentCommand) error {
+	uow := catalogrepo.NewCatalogUnitOfWork(u.txManager, q.TenantSchema)
+	return appcommand.NewRemoveProductComponentHandler(uow, u.eventPublisher).Handle(ctx, q)
+}

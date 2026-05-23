@@ -99,7 +99,7 @@ k-retry-failed-logs:
 	kubectl logs -f job/migrate-retry-failed-job -n $(NAMESPACE)
 
 # po zakończeniu — usuń żeby następnym razem móc apply znowu
-k-retry-failed-logs:
+k-delete-retry-job:
 	kubectl delete -f job/migrate-retry-failed-job -n $(NAMESPACE)
 
 pf:
@@ -208,7 +208,8 @@ sqlc-generate:
 docker-host-mackbook:
 	export DOCKER_HOST=unix:///Users/C5383717/.colima/default/docker.sock
 
-
+xxx:
+	echo 'xxx'
 
 codegen:
 	oapi-codegen --config=./apis/config.yaml ./apis/mymigrations.yaml

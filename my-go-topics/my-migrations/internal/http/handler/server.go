@@ -15,10 +15,12 @@ type Server struct {
 	createUser   port.CreateUserPort
 	getUser      port.GetUserPort
 
-	createComponent port.CreateComponentPort
-	getComponent    port.GetComponentPort
-	createProduct   port.CreateProductPort
-	getProduct      port.GetProductPort
+	createComponent        port.CreateComponentPort
+	getComponent           port.GetComponentPort
+	createProduct          port.CreateProductPort
+	getProduct             port.GetProductPort
+	setProductComponent    port.SetProductComponentPort
+	removeProductComponent port.RemoveProductComponentPort
 }
 
 func NewServer(
@@ -35,20 +37,24 @@ func NewServer(
 	getComponent port.GetComponentPort,
 	createProduct port.CreateProductPort,
 	getProduct port.GetProductPort,
+	setProductComponent port.SetProductComponentPort,
+	removeProductComponent port.RemoveProductComponentPort,
 ) *Server {
 	return &Server{
-		createTodo:      createTodo,
-		completeTodo:    completeTodo,
-		deleteTodo:      deleteTodo,
-		getTodo:         getTodo,
-		listTodos:       listTodos,
-		createTenant:    createTenant,
-		getTenant:       getTenant,
-		createUser:      createUser,
-		getUser:         getUser,
-		createComponent: createComponent,
-		getComponent:    getComponent,
-		createProduct:   createProduct,
-		getProduct:      getProduct,
+		createTodo:          createTodo,
+		completeTodo:        completeTodo,
+		deleteTodo:          deleteTodo,
+		getTodo:             getTodo,
+		listTodos:           listTodos,
+		createTenant:        createTenant,
+		getTenant:           getTenant,
+		createUser:          createUser,
+		getUser:             getUser,
+		createComponent:     createComponent,
+		getComponent:        getComponent,
+		createProduct:       createProduct,
+		getProduct:          getProduct,
+		setProductComponent: setProductComponent,
+		removeProductComponent: removeProductComponent,
 	}
 }

@@ -24,3 +24,11 @@ type CreateProductPort interface {
 type GetProductPort interface {
 	Handle(ctx context.Context, q appquery.GetProductQuery) (*appquery.GetProductResult, error)
 }
+
+type SetProductComponentPort interface {
+	Handle(ctx context.Context, cmd appcommand.SetProductComponentCommand) error
+}
+
+type RemoveProductComponentPort interface {
+	Handle(ctx context.Context, cmd appcommand.RemoveProductComponentCommand) error
+}
