@@ -60,7 +60,7 @@ func (r *UserRepository) GetByID(
 
 	row, err := r.queryQ.GetUserID(ctx, id)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows){
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrNotFound
 		}
 		return nil, err
@@ -74,5 +74,29 @@ func (r *UserRepository) GetByID(
 	return &user.User{
 		ID:    row.ID,
 		Email: email,
+	}, nil
+}
+
+func (r *UserRepository) GetByEmail(
+	ctx context.Context,
+	email user.Email,
+) (*user.User, error) {
+
+	row, err := r.queryQ.GetUserByEmail(ctx, email.String())
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+
+	domainEmail, err := user.NewEmail(row.Email)
+	if err != nil {
+		return nil, err
+	}
+
+	return &user.User{
+		ID:    row.ID,
+		Email: domainEmail,
 	}, nil
 }

@@ -105,6 +105,33 @@ paths:
         "500":
           $ref: "#/components/responses/500"
 
+  /users/by-email:
+    get:
+      operationId: getUserByEmail
+      summary: Get a user by email
+      tags: [users]
+      parameters:
+        - name: email
+          in: query
+          required: true
+          schema:
+            type: string
+            format: email
+            example: user@example.com
+      responses:
+        "200":
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/400"
+        "404":
+          $ref: "#/components/responses/404"
+        "500":
+          $ref: "#/components/responses/500"
+
   # ── Todos (tenant-scoped) ──────────────────────────────────────────────────
 
   /todos:

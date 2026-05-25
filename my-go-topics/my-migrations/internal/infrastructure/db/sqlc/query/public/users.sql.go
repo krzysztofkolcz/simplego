@@ -11,11 +11,26 @@ import (
 	"github.com/google/uuid"
 )
 
+const getUserByEmail = `-- name: GetUserByEmail :one
+SELECT
+    id,
+    email
+FROM users
+WHERE email = $1
+`
+
+func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByEmail, email)
+	var i User
+	err := row.Scan(&i.ID, &i.Email)
+	return i, err
+}
+
 const getUserID = `-- name: GetUserID :one
 SELECT
     id,
     email
-FROM users 
+FROM users
 WHERE id = $1
 `
 

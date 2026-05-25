@@ -5,9 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
-	"net/url"
 	"os"
 
 	"github.com/google/uuid"
@@ -24,13 +22,15 @@ func main() {
 	}
 
 	ctx := context.Background()
-	dsn := buildDSNFromEnv()
+	dsn := db.BuildDSNFromEnv()
 
 	slogHandler := slogctx.NewHandler(
 		slog.NewJSONHandler(os.Stdout, nil),
 		nil,
 	)
 	logger := slog.New(slogHandler)
+	logger.Info("database host:", "%s", os.Getenv("DB_HOST"))
+	logger.Info("database dsn:", "%s", dsn)
 
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
@@ -107,21 +107,6 @@ func retryFailed(ctx context.Context, pool *pgxpool.Pool, sqlDb *sql.DB, dsn str
 	return nil
 }
 
-func buildDSNFromEnv() string {
-	dbPort := os.Getenv("DB_PORT")
-	if dbPort == "" {
-		dbPort = "5432"
-	}
-
-	u := &url.URL{
-		Scheme:   "postgres",
-		User:     url.UserPassword(os.Getenv("DB_USER"), os.Getenv("DB_PASS")),
-		Host:     net.JoinHostPort(os.Getenv("DB_HOST"), dbPort),
-		Path:     "/" + os.Getenv("DB_NAME"),
-		RawQuery: "sslmode=disable",
-	}
-	return u.String()
-}
 
 func httpHandler(w http.ResponseWriter, r *http.Request) {
 	name := os.Getenv("APP_NAME")

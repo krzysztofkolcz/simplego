@@ -12,8 +12,9 @@ type Server struct {
 	listTodos    port.ListTodosPort
 	createTenant port.CreateTenantPort
 	getTenant    port.GetTenantPort
-	createUser   port.CreateUserPort
-	getUser      port.GetUserPort
+	createUser      port.CreateUserPort
+	getUser         port.GetUserPort
+	getUserByEmail  port.GetUserByEmailPort
 
 	createComponent        port.CreateComponentPort
 	getComponent           port.GetComponentPort
@@ -33,6 +34,7 @@ func NewServer(
 	getTenant port.GetTenantPort,
 	createUser port.CreateUserPort,
 	getUser port.GetUserPort,
+	getUserByEmail port.GetUserByEmailPort,
 	createComponent port.CreateComponentPort,
 	getComponent port.GetComponentPort,
 	createProduct port.CreateProductPort,
@@ -48,8 +50,9 @@ func NewServer(
 		listTodos:           listTodos,
 		createTenant:        createTenant,
 		getTenant:           getTenant,
-		createUser:          createUser,
-		getUser:             getUser,
+		createUser:         createUser,
+		getUser:            getUser,
+		getUserByEmail:     getUserByEmail,
 		createComponent:     createComponent,
 		getComponent:        getComponent,
 		createProduct:       createProduct,

@@ -13,6 +13,7 @@ import (
 type Querier interface {
 	GetTenantByID(ctx context.Context, id uuid.UUID) (GetTenantByIDRow, error)
 	GetTenantBySchema(ctx context.Context, schemaName string) (GetTenantBySchemaRow, error)
+	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserID(ctx context.Context, id uuid.UUID) (User, error)
 }
 

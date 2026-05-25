@@ -39,3 +39,15 @@ func NewGetUserUseCase(commandQ *commanddb.Queries, queryQ *querydb.Queries) por
 func (u *getUserUseCase) Handle(ctx context.Context, q appquery.GetUserQuery) (*appquery.GetUserResult, error) {
 	return appquery.NewGetUserHandler(u.repo).Handle(ctx, q)
 }
+
+type getUserByEmailUseCase struct {
+	repo user.Repository
+}
+
+func NewGetUserByEmailUseCase(commandQ *commanddb.Queries, queryQ *querydb.Queries) port.GetUserByEmailPort {
+	return &getUserByEmailUseCase{repo: publicrepo.NewUserRepository(commandQ, queryQ)}
+}
+
+func (u *getUserByEmailUseCase) Handle(ctx context.Context, q appquery.GetUserByEmailQuery) (*appquery.GetUserByEmailResult, error) {
+	return appquery.NewGetUserByEmailHandler(u.repo).Handle(ctx, q)
+}

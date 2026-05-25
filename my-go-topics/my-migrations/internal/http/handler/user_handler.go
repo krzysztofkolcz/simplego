@@ -33,6 +33,30 @@ func (s *Server) CreateUser(
 	return httpapi.CreateUser201JSONResponse{Id: id}, nil
 }
 
+func (s *Server) GetUserByEmail(
+	ctx context.Context,
+	req httpapi.GetUserByEmailRequestObject,
+) (httpapi.GetUserByEmailResponseObject, error) {
+
+	result, err := s.getUserByEmail.Handle(ctx, appquery.GetUserByEmailQuery{
+		Email: string(req.Params.Email),
+	})
+	if err != nil {
+		if errors.Is(err, domain.ErrInvalidEmail) {
+			return httpapi.GetUserByEmail400JSONResponse{N400JSONResponse: badRequestError(err.Error())}, nil
+		}
+		if errors.Is(err, domain.ErrNotFound) {
+			return httpapi.GetUserByEmail404JSONResponse{N404JSONResponse: notFoundError()}, nil
+		}
+		return httpapi.GetUserByEmail500JSONResponse{N500JSONResponse: internalError(err)}, nil
+	}
+
+	return httpapi.GetUserByEmail200JSONResponse{
+		Id:    result.ID,
+		Email: openapi_types.Email(result.Email),
+	}, nil
+}
+
 func (s *Server) GetUser(
 	ctx context.Context,
 	req httpapi.GetUserRequestObject,

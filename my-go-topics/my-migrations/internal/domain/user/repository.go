@@ -9,4 +9,5 @@ import (
 type Repository interface {
 	Create(ctx context.Context, user User) error
 	GetByID(ctx context.Context, id uuid.UUID) (*User, error)
+	GetByEmail(ctx context.Context, email Email) (*User, error)
 }

@@ -43,9 +43,13 @@ func main() {
 	)
 	defer stop()
 
+	logger.Info("database host:", "%s", os.Getenv("DB_HOST"))
+	dsn := db.BuildDSNFromEnv()
+	logger.Info("database dsn:", "%s", dsn)
+
 	// Database pool
 	pool, err := db.NewPool(ctx, db.Config{
-		DatabaseURL:       os.Getenv("DATABASE_URL"),
+		DatabaseURL:       dsn,
 		MaxConns:          20,
 		MinConns:          5,
 		MaxConnLifetime:   time.Hour,
@@ -76,6 +80,7 @@ func main() {
 		usecase.NewGetTenantUseCase(commandQ, queryQ),
 		usecase.NewCreateUserUseCase(txManager),
 		usecase.NewGetUserUseCase(commandQ, queryQ),
+		usecase.NewGetUserByEmailUseCase(commandQ, queryQ),
 		usecase.NewCreateComponentUseCase(txManager, eventPublisher),
 		usecase.NewGetComponentUseCase(txManager),
 		usecase.NewCreateProductUseCase(txManager, eventPublisher),

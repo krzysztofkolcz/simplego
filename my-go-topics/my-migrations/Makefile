@@ -30,7 +30,7 @@ REGISTRY_PORT=5000
 # Helm install
 ####
 # Start
-VERSION=0.0.37
+VERSION=0.0.44
 IMAGE=kkolcz/go-migrations
 HOST_REGISTRY=localhost:5000
 CLUSTER_NAME=go-hello-cluster
@@ -75,6 +75,13 @@ k3d-image-helm-up: k3d-image k3d-helm-up
 # TODO - potwierdzić
 k3d-template:
 	helm template $(RELEASE) $(CHART_DIR) -f $(CHART_DIR)/values.yaml	
+
+k3d-template-2:
+	helm template $(RELEASE) $(CHART_DIR) \
+	-n go-migrations-ns \
+	-f charts/values.yaml \
+	-f charts/values.local.yaml \
+	| grep -A 20 "kind: Deployment"
 
 # j.w.
 # TODO - potwierdzić

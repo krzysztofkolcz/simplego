@@ -25,13 +25,9 @@ spec:
               until nc -z $DB_HOST 5432; do
                 sleep 2
               done
-          env:
-            - name: DB_HOST
-              valueFrom:
-                secretKeyRef:
-                  name: postgresql-secret
-                  key: DB_HOST
-
+          envFrom:
+            - secretRef:
+                name: {{ .Values.app.secretName }}
       containers:
         - name: migrate
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -39,4 +35,9 @@ spec:
           command: ["/app", "migrate"]
           env:
 {{ toYaml .Values.app.env | indent 12 }}
+          {{- if .Values.app.secretName }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.app.secretName }}
+          {{- end }}
 {{- end }}

@@ -2,6 +2,9 @@ package db
 
 import (
 	"fmt"
+	"net"
+	"net/url"
+	"os"
 	"time"
 )
 
@@ -44,4 +47,20 @@ func DefaultConfig() Config {
 
 		HealthCheckPeriod: time.Minute,
 	}
+}
+
+func BuildDSNFromEnv() string {
+	dbPort := os.Getenv("DB_PORT")
+	if dbPort == "" {
+		dbPort = "5432"
+	}
+
+	u := &url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(os.Getenv("DB_USER"), os.Getenv("DB_PASS")),
+		Host:     net.JoinHostPort(os.Getenv("DB_HOST"), dbPort),
+		Path:     "/" + os.Getenv("DB_NAME"),
+		RawQuery: "sslmode=disable",
+	}
+	return u.String()
 }

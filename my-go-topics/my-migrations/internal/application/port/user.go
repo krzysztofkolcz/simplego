@@ -16,3 +16,7 @@ type CreateUserPort interface {
 type GetUserPort interface {
 	Handle(ctx context.Context, q appquery.GetUserQuery) (*appquery.GetUserResult, error)
 }
+
+type GetUserByEmailPort interface {
+	Handle(ctx context.Context, q appquery.GetUserByEmailQuery) (*appquery.GetUserByEmailResult, error)
+}
