@@ -27,6 +27,20 @@ func (u *createComponentUseCase) Handle(ctx context.Context, cmd appcommand.Crea
 	return appcommand.NewCreateComponentHandler(uow, u.eventPublisher).Handle(ctx, cmd)
 }
 
+type updateComponentUseCase struct {
+	txManager      *db.TxManager
+	eventPublisher domain.EventPublisher
+}
+
+func NewUpdateComponentUseCase(txManager *db.TxManager, publisher domain.EventPublisher) port.UpdateComponentPort {
+	return &updateComponentUseCase{txManager: txManager, eventPublisher: publisher}
+}
+
+func (u *updateComponentUseCase) Handle(ctx context.Context, cmd appcommand.UpdateComponentCommand) error {
+	uow := catalogrepo.NewCatalogUnitOfWork(u.txManager, cmd.TenantSchema)
+	return appcommand.NewUpdateComponentHandler(uow, u.eventPublisher).Handle(ctx, cmd)
+}
+
 type getComponentUseCase struct {
 	txManager *db.TxManager
 }

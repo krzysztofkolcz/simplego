@@ -17,6 +17,7 @@ type Server struct {
 	getUserByEmail  port.GetUserByEmailPort
 
 	createComponent        port.CreateComponentPort
+	updateComponent        port.UpdateComponentPort
 	getComponent           port.GetComponentPort
 	createProduct          port.CreateProductPort
 	getProduct             port.GetProductPort
@@ -36,6 +37,7 @@ func NewServer(
 	getUser port.GetUserPort,
 	getUserByEmail port.GetUserByEmailPort,
 	createComponent port.CreateComponentPort,
+	updateComponent port.UpdateComponentPort,
 	getComponent port.GetComponentPort,
 	createProduct port.CreateProductPort,
 	getProduct port.GetProductPort,
@@ -54,6 +56,7 @@ func NewServer(
 		getUser:            getUser,
 		getUserByEmail:     getUserByEmail,
 		createComponent:     createComponent,
+		updateComponent:     updateComponent,
 		getComponent:        getComponent,
 		createProduct:       createProduct,
 		getProduct:          getProduct,

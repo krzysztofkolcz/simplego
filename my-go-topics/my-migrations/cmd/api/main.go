@@ -82,6 +82,7 @@ func main() {
 		usecase.NewGetUserUseCase(commandQ, queryQ),
 		usecase.NewGetUserByEmailUseCase(commandQ, queryQ),
 		usecase.NewCreateComponentUseCase(txManager, eventPublisher),
+		usecase.NewUpdateComponentUseCase(txManager, eventPublisher),
 		usecase.NewGetComponentUseCase(txManager),
 		usecase.NewCreateProductUseCase(txManager, eventPublisher),
 		usecase.NewGetProductUseCase(txManager),

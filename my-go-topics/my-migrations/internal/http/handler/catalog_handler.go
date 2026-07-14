@@ -69,6 +69,32 @@ func (s *Server) GetComponent(
 	}, nil
 }
 
+func (s *Server) UpdateComponent(
+	ctx context.Context,
+	req httpapi.UpdateComponentRequestObject,
+) (httpapi.UpdateComponentResponseObject, error) {
+
+	err := s.updateComponent.Handle(ctx, appcommand.UpdateComponentCommand{
+		TenantSchema:    tenantSchema(req.Params.XTenantID),
+		ID:              req.Id,
+		Description:     req.Body.Description,
+		Manufacturer:    req.Body.Manufacturer,
+		ManufacturerURL: req.Body.ManufacturerUrl,
+		Price:           req.Body.Price,
+		WeightG:         req.Body.WeightG,
+		Quantity:        req.Body.Quantity,
+		ImageURL:        req.Body.ImageUrl,
+	})
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return httpapi.UpdateComponent404JSONResponse{N404JSONResponse: notFoundError()}, nil
+		}
+		return httpapi.UpdateComponent500JSONResponse{N500JSONResponse: internalError(err)}, nil
+	}
+
+	return httpapi.UpdateComponent204Response{}, nil
+}
+
 func (s *Server) CreateProduct(
 	ctx context.Context,
 	req httpapi.CreateProductRequestObject,

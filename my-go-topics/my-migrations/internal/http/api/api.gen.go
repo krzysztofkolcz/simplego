@@ -146,6 +146,17 @@ type Todo struct {
 // TodoList defines model for TodoList.
 type TodoList = []Todo
 
+// UpdateComponentRequest defines model for UpdateComponentRequest.
+type UpdateComponentRequest struct {
+	Description     *string  `json:"description,omitempty"`
+	ImageUrl        *string  `json:"image_url,omitempty"`
+	Manufacturer    *string  `json:"manufacturer,omitempty"`
+	ManufacturerUrl *string  `json:"manufacturer_url,omitempty"`
+	Price           *float64 `json:"price,omitempty"`
+	Quantity        *int     `json:"quantity,omitempty"`
+	WeightG         *int     `json:"weight_g,omitempty"`
+}
+
 // User defines model for User.
 type User struct {
 	Email openapi_types.Email `json:"email"`
@@ -181,6 +192,12 @@ type CreateComponentParams struct {
 
 // GetComponentParams defines parameters for GetComponent.
 type GetComponentParams struct {
+	// XTenantID Tenant identifier — maps to the PostgreSQL schema for this tenant
+	XTenantID XTenantID `json:"X-Tenant-ID"`
+}
+
+// UpdateComponentParams defines parameters for UpdateComponent.
+type UpdateComponentParams struct {
 	// XTenantID Tenant identifier — maps to the PostgreSQL schema for this tenant
 	XTenantID XTenantID `json:"X-Tenant-ID"`
 }
@@ -247,6 +264,9 @@ type GetUserByEmailParams struct {
 // CreateComponentJSONRequestBody defines body for CreateComponent for application/json ContentType.
 type CreateComponentJSONRequestBody = CreateComponentRequest
 
+// UpdateComponentJSONRequestBody defines body for UpdateComponent for application/json ContentType.
+type UpdateComponentJSONRequestBody = UpdateComponentRequest
+
 // CreateProductJSONRequestBody defines body for CreateProduct for application/json ContentType.
 type CreateProductJSONRequestBody = CreateProductRequest
 
@@ -270,6 +290,9 @@ type ServerInterface interface {
 	// Get a component by ID
 	// (GET /components/{id})
 	GetComponent(w http.ResponseWriter, r *http.Request, id ID, params GetComponentParams)
+	// Update a component's catalog details
+	// (PATCH /components/{id})
+	UpdateComponent(w http.ResponseWriter, r *http.Request, id ID, params UpdateComponentParams)
 	// Create a new product
 	// (POST /products)
 	CreateProduct(w http.ResponseWriter, r *http.Request, params CreateProductParams)
@@ -411,6 +434,59 @@ func (siw *ServerInterfaceWrapper) GetComponent(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetComponent(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateComponent operation middleware
+func (siw *ServerInterfaceWrapper) UpdateComponent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateComponentParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Tenant-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Tenant-ID")]; found {
+		var XTenantID XTenantID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Tenant-ID", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Tenant-ID", valueList[0], &XTenantID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Tenant-ID", Err: err})
+			return
+		}
+
+		params.XTenantID = XTenantID
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Tenant-ID is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Tenant-ID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateComponent(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1122,6 +1198,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc("POST "+options.BaseURL+"/components", wrapper.CreateComponent)
 	m.HandleFunc("GET "+options.BaseURL+"/components/{id}", wrapper.GetComponent)
+	m.HandleFunc("PATCH "+options.BaseURL+"/components/{id}", wrapper.UpdateComponent)
 	m.HandleFunc("POST "+options.BaseURL+"/products", wrapper.CreateProduct)
 	m.HandleFunc("GET "+options.BaseURL+"/products/{id}", wrapper.GetProduct)
 	m.HandleFunc("DELETE "+options.BaseURL+"/products/{id}/components/{componentId}", wrapper.RemoveProductComponent)
@@ -1214,6 +1291,42 @@ func (response GetComponent404JSONResponse) VisitGetComponentResponse(w http.Res
 type GetComponent500JSONResponse struct{ N500JSONResponse }
 
 func (response GetComponent500JSONResponse) VisitGetComponentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateComponentRequestObject struct {
+	Id     ID `json:"id"`
+	Params UpdateComponentParams
+	Body   *UpdateComponentJSONRequestBody
+}
+
+type UpdateComponentResponseObject interface {
+	VisitUpdateComponentResponse(w http.ResponseWriter) error
+}
+
+type UpdateComponent204Response struct {
+}
+
+func (response UpdateComponent204Response) VisitUpdateComponentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type UpdateComponent404JSONResponse struct{ N404JSONResponse }
+
+func (response UpdateComponent404JSONResponse) VisitUpdateComponentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateComponent500JSONResponse struct{ N500JSONResponse }
+
+func (response UpdateComponent500JSONResponse) VisitUpdateComponentResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
 
@@ -1770,6 +1883,9 @@ type StrictServerInterface interface {
 	// Get a component by ID
 	// (GET /components/{id})
 	GetComponent(ctx context.Context, request GetComponentRequestObject) (GetComponentResponseObject, error)
+	// Update a component's catalog details
+	// (PATCH /components/{id})
+	UpdateComponent(ctx context.Context, request UpdateComponentRequestObject) (UpdateComponentResponseObject, error)
 	// Create a new product
 	// (POST /products)
 	CreateProduct(ctx context.Context, request CreateProductRequestObject) (CreateProductResponseObject, error)
@@ -1896,6 +2012,40 @@ func (sh *strictHandler) GetComponent(w http.ResponseWriter, r *http.Request, id
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetComponentResponseObject); ok {
 		if err := validResponse.VisitGetComponentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateComponent operation middleware
+func (sh *strictHandler) UpdateComponent(w http.ResponseWriter, r *http.Request, id ID, params UpdateComponentParams) {
+	var request UpdateComponentRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body UpdateComponentJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateComponent(ctx, request.(UpdateComponentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateComponent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateComponentResponseObject); ok {
+		if err := validResponse.VisitUpdateComponentResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -2309,39 +2459,40 @@ func (sh *strictHandler) GetUser(w http.ResponseWriter, r *http.Request, id ID) 
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/9RaW24juRXdCsHkIwHKlpzxANP6StvWDITxo0d2JwM0GgJddSWxXVWs5sNutSEgH1lC",
-	"frKE7CP5zSKykoBkvcVSVVsPa75sSSTv49x77uXjGfssSlgMsRR48IwTwkkEErj5dJ79NrrQH2mMBzgh",
-	"co49HJMI8KCYPQqwhzl8VpRDgAeSK/Cw8OcQET11ynhEJB5gpageKReJni4kp/EML5cebhRBN1351zuI",
-	"SWZDAMLnNJGUaUn2F0QDiCWdUuDof3/7B4pIIpBkSM4BvWNCzjjc/nKJrEw0ZRzJORVImsnYs0rPgQTA",
-	"C7V/PbKLH40uNtJ/qSeLhMUCDCan/b7+47NYQiz1vyRJQuoTbVLvk9B2PWP4QqIktDOy6fr/RxIq8w9w",
-	"zrhdKNDyzt5eTMbDX94Pb++whyMQgsz092P4rEBIdM+CBYqZRBrxkGqvPVE5RyIBn05T8djDQhKpBB6c",
-	"9vtLo3xh6e85TPEA/65XhFzP/ip6Q63OVSrVzKsCdUYCxK0qeOnh0/7pLpxwfXM3+fHm/fVFzQWCKe6D",
-	"MX/KVBxU7Dzdpp3XuQhj5ZtdWHl+c/3j5ej8zm0kCTmQYIHgCxVSVCx9s01Lz1k8Dalv4Px+NzE9ur4b",
-	"jq/fXk5uh+O/DMeT4Xh8M65YPYol8JiESAB/BI7sCoXN3283it3iivWrpGv4mLMEuKTWamvXc50jPOxz",
-	"IBKCCZEVSgmIhCNJI1jllZpqjjVp0IGePEwjMoOJ4qFzkYjEakp8qTjw1gGNq1hKdfyQcOpD1WSm7sOS",
-	"vbGK7oHrsZ8ViSWVi9JCNJYws78+AZ3N5WTm+nVZ5u8PtiAZlTyLyMdcGrv/BDakzw0iOZYpjTZDmga3",
-	"zsTh7dFJ/+cXQbZHLEoKg6BCMo5O+g///ZdL75fCFMCUqFDiQd/bDLJuaL3jLFB+M1Zt7l91zV9pMAOJ",
-	"3nG2qVskmRkdqIRIOKWnXxDOycLtgGbLbavSaLhlp8mqfcR3cUtNdnn2GhVYwBoVkFSGNdFnaoEiGj60",
-	"irdzmwW/F8AbBUNEaFgVrATwP6cfj30WYa/Azw5v08iOatYoGJeqW1WfTqS8ylcuWRcgCQ0hGGZVk4Th",
-	"zRQPPnSocXjprSaHXq4ao13WqcWtVR2EnHSsP1mpdpG6JHwG0pEt9Qi1a6x6yeW33F9tRF7uJlcrtu51",
-	"vpR1KyTk/UmNZVe70PVmGZWK5RqNuSrk1aI/M3UdkNU4Wol1861LdMq2Dk++XjOzlUaDg08T6JwIYzN8",
-	"JCFyZcOGvF/0Ki4ISqId8Zxq2jUR1/VXK4FZWrs006XjLcg0UtqbqbIKeeac9D0c0ZhGKsKDE69Nt7XK",
-	"2Dq5nZDt6NaIzrjZB03ybCxIYf2EghqLGUL5PgixfqJKtOZBd1s2axCM4W1dgu4P3FEaQqprOueesRBI",
-	"/NJ9UUdcNmlJ7IpmAa9kQpPZl9QGeyc6MX5yEIluc3bV33gv7Uu8xl5ID6bxlJW6P3y1QFdZjAr09t0I",
-	"e/gRuLCb65Pj/nFf68ISiElC8QB/d9w//g575kDRmNurnXYy61jtEbPqKMCD+tbNzC9ORRvao2JIrzhv",
-	"1P1D2s6csWDR4Yyj2zlDw+ZyWfWw5Arqp4d/6p9sWYuiWXUe8qSzUJqJ9lir37R0rmtPDypOhtaP1YPM",
-	"IYqKIsIXOYSIoBieUD4H/WFOwulRYsvJH3FWXT9gn0gSshn+qJcpC3mmwVIrkLaR1UD5CeRWosRrHZzH",
-	"UgXK/vagzM1YC2LpZPK0C4SnG0D4E0hEStjdL5A5SXdDlmLamtVZ03moOV07gji8jE4VfM18TnIM18dC",
-	"a/JuIRheP3UzI9Zgtf+0TSHomLQGqArrlq4Vl/ZwQXdIqyCOIWKPUN8f7B7Q9lHlq1MH/qerd5E/51Sn",
-	"hIrpv/8pF+gr4uBDIhVf7Am/90L95+/oIdelpIFF9UEqJ6AeTpQjzRzbt8OEZ/uMvmbn2onXW2JEkifK",
-	"4gV6yhH6Ct9Kx3sIqAsWkE8oVPfoK3mQioT0q/pUCrCy+usjTFOGvXNvLfN32dX87ip19cj88Ap1+rTh",
-	"hXU6vXpuG/tmWzU9f0uRwZ4BXYG9taLnuH8bwey6RqdqNaO0/wptPbpSoGtuZwETjf6+pELemRGbdtO7",
-	"cnt2duJwfEiFRNa+/bSwJYEld5vPpniuYzMWsIPdsZTv7Q6QBVnAXnOvIi10dbzz5MoZranDvTDfbxoB",
-	"L92mOFoQ41Gr7b4Yy/pAk5bbm15zPXglv22XwxoD+xXKhha7UjScUd3LDrZNs+baG5ynAw4tuiPCHyBA",
-	"RKDibP4bnbyH/umK8IcMkYqqbmCUSB/1rqs05pJgl9Wi/Nji8KqF1u630jErC1UGtYW3BHXvfnGU3+40",
-	"8aM2+GwxTG91aglonjV/VsAXxavm7AKo+T3zZg9ldkmlJribUC9R6UFtny3taldq2s3d1oh62w4pzfDD",
-	"2h91RWbP3q4UudzVeoJ5vmtdV9X4kvkkRAE8QsiSyB52mZeUeC5lMuj1Qj1gzoQc/ND/od97PMHLj8v/",
-	"BwAA//9tKi7ZhjEAAA==",
+	"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",
+	"/7qLrC+NNAAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

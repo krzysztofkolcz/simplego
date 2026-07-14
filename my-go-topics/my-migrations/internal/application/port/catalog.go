@@ -13,6 +13,10 @@ type CreateComponentPort interface {
 	Handle(ctx context.Context, cmd appcommand.CreateComponentCommand) (uuid.UUID, error)
 }
 
+type UpdateComponentPort interface {
+	Handle(ctx context.Context, cmd appcommand.UpdateComponentCommand) error
+}
+
 type GetComponentPort interface {
 	Handle(ctx context.Context, q appquery.GetComponentQuery) (*appquery.GetComponentResult, error)
 }

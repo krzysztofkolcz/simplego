@@ -45,3 +45,39 @@ func (c *Component) PullEvents() []domain.DomainEvent {
 	c.events = nil
 	return events
 }
+
+func (c *Component) UpdateDetails(
+	description *string,
+	manufacturer *string,
+	manufacturerURL *string,
+	price *float64,
+	weightG *int,
+	quantity *int,
+	imageURL *string,
+) {
+	if description != nil {
+		c.Description = *description
+	}
+	if manufacturer != nil {
+		c.Manufacturer = *manufacturer
+	}
+	if manufacturerURL != nil {
+		c.ManufacturerURL = *manufacturerURL
+	}
+	if price != nil {
+		c.Price = *price
+	}
+	if weightG != nil {
+		c.WeightG = *weightG
+	}
+	if quantity != nil {
+		c.Quantity = *quantity
+	}
+	if imageURL != nil {
+		c.ImageURL = *imageURL
+	}
+	c.events = append(c.events, ComponentUpdated{
+		ComponentID: c.ID,
+		OccurredAt:  time.Now(),
+	})
+}

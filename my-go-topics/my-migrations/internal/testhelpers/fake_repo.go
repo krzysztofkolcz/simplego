@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/krzysztofkolcz/mymigrations/internal/domain"
+	"github.com/krzysztofkolcz/mymigrations/internal/domain/catalog"
 	"github.com/krzysztofkolcz/mymigrations/internal/domain/tenant"
 	"github.com/krzysztofkolcz/mymigrations/internal/domain/todo"
 	"github.com/krzysztofkolcz/mymigrations/internal/domain/user"
@@ -133,6 +134,18 @@ func (f *FakeUserRepo) GetByID(_ context.Context, id uuid.UUID) (*user.User, err
 	return nil, domain.ErrNotFound
 }
 
+func (f *FakeUserRepo) GetByEmail(_ context.Context, email user.Email) (*user.User, error) {
+	if f.Err != nil {
+		return nil, f.Err
+	}
+	for i, u := range f.Created {
+		if u.Email == email {
+			return &f.Created[i], nil
+		}
+	}
+	return nil, domain.ErrNotFound
+}
+
 // ── Tenant ────────────────────────────────────────────────────────────────────
 
 type FakeTenantUoW struct {
@@ -163,3 +176,80 @@ func (f *FakeTenantRepo) Create(_ context.Context, t tenant.Tenant) error {
 func (f *FakeTenantRepo) GetByID(_ context.Context, _ uuid.UUID) (*tenant.Tenant, error) {
 	return nil, f.Err
 }
+
+// ── Catalog ───────────────────────────────────────────────────────────────────
+
+type FakeCatalogUoW struct {
+	Components catalog.ComponentRepository
+	Products   catalog.ProductRepository
+	Err        error
+}
+
+func (f *FakeCatalogUoW) Execute(_ context.Context, fn func(context.Context, catalog.ComponentRepository, catalog.ProductRepository) error) error {
+	if f.Err != nil {
+		return f.Err
+	}
+	return fn(context.Background(), f.Components, f.Products)
+}
+
+type FakeCatalogComponentRepo struct {
+	Store   []catalog.Component
+	Updated []catalog.Component
+	Err     error
+}
+
+func (f *FakeCatalogComponentRepo) Create(_ context.Context, c catalog.Component) error {
+	if f.Err != nil {
+		return f.Err
+	}
+	f.Store = append(f.Store, c)
+	return nil
+}
+
+func (f *FakeCatalogComponentRepo) GetByID(_ context.Context, id uuid.UUID) (*catalog.Component, error) {
+	if f.Err != nil {
+		return nil, f.Err
+	}
+	for i, c := range f.Store {
+		if c.ID == id {
+			return &f.Store[i], nil
+		}
+	}
+	return nil, domain.ErrNotFound
+}
+
+func (f *FakeCatalogComponentRepo) Update(_ context.Context, c catalog.Component) error {
+	if f.Err != nil {
+		return f.Err
+	}
+	for i, existing := range f.Store {
+		if existing.ID == c.ID {
+			f.Store[i] = c
+			f.Updated = append(f.Updated, c)
+			return nil
+		}
+	}
+	return domain.ErrNotFound
+}
+
+func (f *FakeCatalogComponentRepo) Delete(_ context.Context, id uuid.UUID) error {
+	if f.Err != nil {
+		return f.Err
+	}
+	for i, c := range f.Store {
+		if c.ID == id {
+			f.Store = append(f.Store[:i], f.Store[i+1:]...)
+			return nil
+		}
+	}
+	return domain.ErrNotFound
+}
+
+type FakeCatalogProductRepo struct{}
+
+func (f *FakeCatalogProductRepo) Create(_ context.Context, _ catalog.Product) error      { return nil }
+func (f *FakeCatalogProductRepo) GetByID(_ context.Context, _ uuid.UUID) (*catalog.Product, error) {
+	return nil, domain.ErrNotFound
+}
+func (f *FakeCatalogProductRepo) Update(_ context.Context, _ catalog.Product) error { return nil }
+func (f *FakeCatalogProductRepo) Delete(_ context.Context, _ uuid.UUID) error       { return nil }

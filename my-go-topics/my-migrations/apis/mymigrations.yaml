@@ -259,6 +259,27 @@ paths:
         "500":
           $ref: "#/components/responses/500"
 
+    patch:
+      operationId: updateComponent
+      summary: Update a component's catalog details
+      tags: [catalog]
+      parameters:
+        - $ref: "#/components/parameters/XTenantID"
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateComponentRequest"
+      responses:
+        "204":
+          description: Component updated
+        "404":
+          $ref: "#/components/responses/404"
+        "500":
+          $ref: "#/components/responses/500"
+
   # ── Catalog: Products (tenant-scoped) ─────────────────────────────────────
 
   /products:
@@ -501,6 +522,25 @@ components:
           type: integer
           minimum: 1
           example: 10
+
+    UpdateComponentRequest:
+      type: object
+      properties:
+        description:
+          type: string
+        manufacturer:
+          type: string
+        manufacturer_url:
+          type: string
+        price:
+          type: number
+          format: double
+        weight_g:
+          type: integer
+        quantity:
+          type: integer
+        image_url:
+          type: string
 
     CreateComponentRequest:
       type: object
