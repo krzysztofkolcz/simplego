@@ -1,0 +1,3 @@
+1. orchestration. aplikacja będzie miał więcej serwisów.
+2. orchestrator loguje informacje o problemie (logi - prometheus/grafana)
+3. rozumiem, że chodzi o moment, gdy z jednej strony rekordy zostają usuwane, a z drugiej generowany jest alert. System odpowiedzialny za alert może robić update tego usera w transakcji (np. zwiększyć licznik wysłanych alertów). Jeżeli wersja rekordu się nie zgadza, to wycofuje transakcje i nie wysyła alertu. 

@@ -42,7 +42,7 @@ doppler configs tokens create local-k8s-my-migrations \
   --config local \
   --plain
 ```
-REMOVED_DOPPLER_TOKEN
+dp.st.local....
 
 → skopiuj token: dp.st.local.xxx...
 
@@ -58,7 +58,7 @@ doppler secrets set POSTGRES_PASSWORD "superadminpassword" --project my-migratio
 ```
 kubectl create secret generic doppler-token \
   --namespace go-migrations-ns \
-  --from-literal=serviceToken="REMOVED_DOPPLER_TOKEN"
+  --from-literal=serviceToken="dp.st.local...."
 ```
 
 # Doppler secret
