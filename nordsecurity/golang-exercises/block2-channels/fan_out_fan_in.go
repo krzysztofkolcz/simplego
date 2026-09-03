@@ -43,24 +43,29 @@ import "sync"
 //     naturalnie, aż faktycznie coś przyjdzie albo kanał się zamknie.
 func FanOutFanIn(input <-chan int, numWorkers int, worker func(int) int) <-chan int {
 	output := make(chan int)
-	in := make(chan int)
-	// TODO: zaimplementuj
 	var wg sync.WaitGroup
-	_ = wg
-	for range MaxWorkers {
-		go fworker(in, output)
-	}
+	go runWorkers(input, output, numWorkers, &wg, worker)
 	return output
 }
 
 const MaxWorkers = 10
 
-func fworker(in <-chan int, out chan<- int) {
-	for r := range in {
-		out <- process(r)
+func runWorkers(in <-chan int, out chan<- int, numWorkers int, wg *sync.WaitGroup, worker func(int) int) {
+	for range numWorkers {
+		wg.Add(1)
+		go fworker(in, out, wg, worker)
 	}
+	wg.Wait()
+	close(out)
 }
 
-func process(r int) int {
+func fworker(in <-chan int, out chan<- int, wg *sync.WaitGroup, worker func(int) int) {
+	for r := range in {
+		out <- worker(r)
+	}
+	wg.Done()
+}
+
+func Process(r int) int {
 	return r
 }

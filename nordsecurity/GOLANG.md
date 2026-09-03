@@ -117,6 +117,13 @@
 
 ## Blok 4 — Wzorce z realnych rozmów (łączy wszystko powyżej)
 
+> **Powtórka (jak wracać do tego bloku):** nie podglądać starego rozwiązania
+> przed próbą. Pisać od zera, na czas (~20-25 min/wzorzec), mówiąc na głos co
+> się robi — dopiero potem porównać z tym co już jest zaimplementowane.
+> Oceniać się po tym czy działa i czy umiesz uzasadnić decyzje (nie po tym
+> czy kod jest identyczny). Blisko rozmowy: drugie, szybsze przejście "na
+> sucho" (opowiedzenie wzorca bez pisania kodu) jako finalny refresh.
+
 31. **Worker pool z ograniczoną liczbą workerów + timeout per zadanie + graceful
     shutdown** przez `signal.NotifyContext` — dokładnie to, co jest w
     [[PLAN-COVERON-SPRINT.md]] jako „Dzień 9".
